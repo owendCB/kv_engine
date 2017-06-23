@@ -20,6 +20,7 @@
 #include "dcp/backfill_disk.h"
 #include "dcp/stream.h"
 #include "ep_engine.h"
+#include "vbucket.h"
 
 static std::string backfillStateToString(backfill_state_t state) {
     switch (state) {
@@ -56,6 +57,25 @@ void CacheCallback::callback(CacheLookup& lookup) {
         return;
     }
 
+    bool statusIsEngineSuccess = true;
+    bool callingBackfillRecieved = false;
+
+    GetValue gv = vb->getInternal(lookup.getKey(),
+                                  nullptr,
+                                  engine_,
+                                  0,
+                                  /*options*/ NONE,
+                                  /*diskFlushAll*/ false,
+                                  stream_->isKeyOnly() ?
+                                          VBucket::GetKeyOnly::Yes :
+                                          VBucket::GetKeyOnly::No);
+    if (gv.getStatus() == ENGINE_SUCCESS) {
+        if (gv.item->getBySeqno() == lookup.getBySeqno()) {
+            callingBackfillRecieved = true;
+            statusIsEngineSuccess = false;
+        }
+    }
+
     auto hbl = vb->ht.getLockedBucket(lookup.getKey());
     StoredValue* v = vb->ht.unlocked_find(lookup.getKey(),
                                           hbl.getBucketNum(),
@@ -80,6 +100,18 @@ void CacheCallback::callback(CacheLookup& lookup) {
             return;
         }
         hbl.getHTLock().unlock();
+        if (!callingBackfillRecieved) {
+            stream_->getLogger().log(
+                    EXTENSION_LOG_WARNING,
+                    "callbackRefactor: new code is not calling BackfillRecieved"
+                    " when it should \n");
+        }
+        if (statusIsEngineSuccess) {
+            stream_->getLogger().log(
+                    EXTENSION_LOG_WARNING,
+                    "callbackRefactor: new code has status ENGINE_SUCCESS when "
+                    "it should not\n");
+        }
         if (!stream_->backfillReceived(
                     std::move(it), BACKFILL_FROM_MEMORY, /*force*/ false)) {
             setStatus(ENGINE_ENOMEM); // Pause the backfill
@@ -87,6 +119,18 @@ void CacheCallback::callback(CacheLookup& lookup) {
             setStatus(ENGINE_KEY_EEXISTS);
         }
     } else {
+        if (callingBackfillRecieved) {
+            stream_->getLogger().log(
+                    EXTENSION_LOG_WARNING,
+                    "callbackRefactor: new code is calling BackfillRecieved "
+                            "when it should not\n");
+        }
+        if (!statusIsEngineSuccess) {
+            stream_->getLogger().log(
+                    EXTENSION_LOG_WARNING,
+                    "callbackRefactor: new code does not have status "
+                    "ENGINE_SUCCESS when it should \n");
+        }
         setStatus(ENGINE_SUCCESS);
     }
 }

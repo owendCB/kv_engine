@@ -120,6 +120,11 @@ public:
     // Identifier for a vBucket
     typedef uint16_t id_type;
 
+    enum class GetKeyOnly {
+         Yes,
+         No
+     };
+
     VBucket(id_type i,
             vbucket_state_t newState,
             EPStats& st,
@@ -978,6 +983,7 @@ public:
      * @param bgFetchDelay
      * @param options flags indicating some retrieval related info
      * @param diskFlushAll
+     * @param getKeyOnly if GetKeyOnly::Yes we want only the key
      *
      * @return the result of the operation
      */
@@ -986,7 +992,8 @@ public:
                          EventuallyPersistentEngine& engine,
                          int bgFetchDelay,
                          get_options_t options,
-                         bool diskFlushAll);
+                         bool diskFlushAll,
+                         GetKeyOnly getKeyOnly);
 
     /**
      * Retrieve the meta data for given key

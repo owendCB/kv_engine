@@ -576,9 +576,23 @@ GetValue EPVBucket::getInternalNonResident(const DocKey& key,
                                            int bgFetchDelay,
                                            get_options_t options,
                                            const StoredValue& v) {
+   
+ LOG(EXTENSION_LOG_WARNING,
+            "callbackRefactor: EPVBucket::getInternalNonResident");
+
+ if (!(options & QUEUE_BG_FETCH)) {
+        LOG(EXTENSION_LOG_WARNING,
+            "callbackRefactor: EPVBucket::getInternalNonResident "
+            "!(options & QUEUE_BG_FETCH)");
+    }
+
     if (options & QUEUE_BG_FETCH) {
         bgFetch(key, cookie, engine, bgFetchDelay);
     } else if (options & get_options_t::ALLOW_META_ONLY) {
+        LOG(EXTENSION_LOG_WARNING,
+            "callbackRefactor: EPVBucket::getInternalNonResident "
+            "options & get_options_t::ALLOW_META_ONLY");
+
         // You can't both ask for a background fetch and just the meta...
         return GetValue(v.toItem(false, 0),
                         ENGINE_SUCCESS,

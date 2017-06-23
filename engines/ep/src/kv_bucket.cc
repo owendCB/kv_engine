@@ -54,6 +54,7 @@
 #include "tapconnmap.h"
 #include "tasks.h"
 #include "vb_count_visitor.h"
+#include "vbucket.h"
 #include "vbucket_bgfetch_item.h"
 #include "vbucketdeletiontask.h"
 #include "warmup.h"
@@ -1478,7 +1479,8 @@ GetValue KVBucket::getInternal(const DocKey& key,
                                engine,
                                bgFetchDelay,
                                options,
-                               diskDeleteAll);
+                               diskDeleteAll,
+                               VBucket::GetKeyOnly::No);
     }
 }
 
