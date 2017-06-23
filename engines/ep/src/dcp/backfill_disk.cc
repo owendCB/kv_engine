@@ -57,8 +57,6 @@ void CacheCallback::callback(CacheLookup& lookup) {
         return;
     }
 
-    bool statusIsEngineSuccess = true;
-    bool callingBackfillRecieved = false;
 
     GetValue gv = vb->getInternal(lookup.getKey(),
                                   nullptr,
@@ -71,68 +69,17 @@ void CacheCallback::callback(CacheLookup& lookup) {
                                           VBucket::GetKeyOnly::No);
     if (gv.getStatus() == ENGINE_SUCCESS) {
         if (gv.item->getBySeqno() == lookup.getBySeqno()) {
-            callingBackfillRecieved = true;
-            statusIsEngineSuccess = false;
-        }
-    }
-
-    auto hbl = vb->ht.getLockedBucket(lookup.getKey());
-    StoredValue* v = vb->ht.unlocked_find(lookup.getKey(),
-                                          hbl.getBucketNum(),
-                                          WantsDeleted::No,
-                                          TrackReference::No);
-    if (v && v->isResident() && v->getBySeqno() == lookup.getBySeqno()) {
-        std::unique_ptr<Item> it;
-        try {
-            it = stream_->isKeyOnly() ?
-                    v->toItemKeyOnly(lookup.getVBucketId()) :
-                    v->toItem(false, lookup.getVBucketId());
-        } catch (const std::bad_alloc&) {
-            setStatus(ENGINE_ENOMEM);
-            stream_->getLogger().log(
-                    EXTENSION_LOG_WARNING,
-                    "Alloc error when trying to create an "
-                    "item copy from hash table. Item seqno:%" PRIi64
-                    ", vb:%" PRIu16 " isKeyOnly:%s",
-                    v->getBySeqno(),
-                    lookup.getVBucketId(),
-                    stream_->isKeyOnly() ? "True" : "False");
+            if (stream_->backfillReceived(std::move(gv.item),
+                                          BACKFILL_FROM_MEMORY,
+                                          /*force */false)) {
+                setStatus(ENGINE_KEY_EEXISTS);
+                return;
+            }
+            setStatus(ENGINE_ENOMEM); // Pause the backfill
             return;
         }
-        hbl.getHTLock().unlock();
-        if (!callingBackfillRecieved) {
-            stream_->getLogger().log(
-                    EXTENSION_LOG_WARNING,
-                    "callbackRefactor: new code is not calling BackfillRecieved"
-                    " when it should \n");
-        }
-        if (statusIsEngineSuccess) {
-            stream_->getLogger().log(
-                    EXTENSION_LOG_WARNING,
-                    "callbackRefactor: new code has status ENGINE_SUCCESS when "
-                    "it should not\n");
-        }
-        if (!stream_->backfillReceived(
-                    std::move(it), BACKFILL_FROM_MEMORY, /*force*/ false)) {
-            setStatus(ENGINE_ENOMEM); // Pause the backfill
-        } else {
-            setStatus(ENGINE_KEY_EEXISTS);
-        }
-    } else {
-        if (callingBackfillRecieved) {
-            stream_->getLogger().log(
-                    EXTENSION_LOG_WARNING,
-                    "callbackRefactor: new code is calling BackfillRecieved "
-                            "when it should not\n");
-        }
-        if (!statusIsEngineSuccess) {
-            stream_->getLogger().log(
-                    EXTENSION_LOG_WARNING,
-                    "callbackRefactor: new code does not have status "
-                    "ENGINE_SUCCESS when it should \n");
-        }
-        setStatus(ENGINE_SUCCESS);
     }
+    setStatus(ENGINE_SUCCESS);
 }
 
 DiskCallback::DiskCallback(active_stream_t& s) : stream_(s) {
