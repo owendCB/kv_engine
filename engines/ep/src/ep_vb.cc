@@ -579,9 +579,17 @@ GetValue EPVBucket::getInternalNonResident(const DocKey& key,
     if (options & QUEUE_BG_FETCH) {
         bgFetch(key, cookie, engine, bgFetchDelay);
     } else {
+        //fprintf(stderr,"callbackRefactor: EPVBucket::getInternalNonResident "
+          //          "!(options & QUEUE_BG_FETCH)");
         LOG(EXTENSION_LOG_WARNING,
                     "callbackRefactor: EPVBucket::getInternalNonResident "
                     "!(options & QUEUE_BG_FETCH)");
+
+        if (options & get_options_t::ALLOW_META_ONLY) {
+        LOG(EXTENSION_LOG_WARNING,
+            "callbackRefactor: EPVBucket::getInternalNonResident "
+            "options & get_options_t::ALLOW_META_ONLY");
+        }
     }
     return GetValue(
             nullptr, ENGINE_EWOULDBLOCK, v.getBySeqno(), true, v.getNRUValue());

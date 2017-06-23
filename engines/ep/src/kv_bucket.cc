@@ -1474,6 +1474,10 @@ GetValue KVBucket::getInternal(const DocKey& key,
             return GetValue(NULL, ENGINE_UNKNOWN_COLLECTION);
         }
 
+        if (!(options & QUEUE_BG_FETCH)) {
+            LOG(EXTENSION_LOG_WARNING,
+                "KVBucket::getInternal !(options & QUEUE_BG_FETCH)");
+        }
         return vb->getInternal(key,
                                cookie,
                                engine,
