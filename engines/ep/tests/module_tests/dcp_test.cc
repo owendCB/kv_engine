@@ -793,6 +793,12 @@ TEST_P(CacheCallbackTest, CacheCallback_engine_success) {
  * of ENGINE_SUCCESS.
  */
 TEST_P(CacheCallbackTest, CacheCallback_engine_success_not_resident) {
+    if (bucketType == "ephemeral") {
+        /* The test relies on being able to evict a key from memory.
+         * Eviction is not supported with empherial buckets.
+         */
+        return;
+    }
     MockActiveStream* mockStream = static_cast<MockActiveStream*>(stream.get());
     active_stream_t activeStream(mockStream);
     CacheCallback callback(*engine, activeStream);
