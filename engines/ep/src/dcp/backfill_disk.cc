@@ -57,9 +57,6 @@ void CacheCallback::callback(CacheLookup& lookup) {
         return;
     }
 
-    LOG(EXTENSION_LOG_WARNING,
-                        "CacheCallback::callback options == NONE ");
-
     GetValue gv = vb->getInternal(lookup.getKey(),
                                   nullptr,
                                   engine_,
