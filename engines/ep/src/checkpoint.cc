@@ -1361,6 +1361,10 @@ void CheckpointManager::dump() const {
     std::cerr << *this << std::endl;
 }
 
+void CheckpointManager::dump(std::stringstream& buffer) {
+    buffer << *this << std::endl;
+}
+
 void CheckpointManager::clear(VBucket& vb, uint64_t seqno) {
     LockHolder lh(queueLock);
     clear_UNLOCKED(vb.getState(), seqno);
@@ -1603,6 +1607,11 @@ snapshot_info_t CheckpointManager::getSnapshotInfo() {
     info.start = lastBySeqno;
     info.range.end = checkpointList.back()->getSnapshotEndSeqno();
 
+ LOG(EXTENSION_LOG_WARNING, "pendingBackfill CheckpointManager::getSnapshotInfo() "
+ "snapshotStartSeqno= %" PRIu64 " snapshotEndSeqno= %" PRIu64 " lastBySeqno= %" PRIu64
+ " getNumItems= %zu", info.range.start, info.range.end, lastBySeqno, checkpointList.back()->getNumItems());
+
+
     // If there are no items in the open checkpoint then we need to resume by
     // using that sequence numbers of the last closed snapshot. The exception is
     // if we are in a partial snapshot which can be detected by checking if the
@@ -1613,6 +1622,9 @@ snapshot_info_t CheckpointManager::getSnapshotInfo() {
     // no items in it.
     if (checkpointList.back()->getNumItems() == 0 &&
         static_cast<uint64_t>(lastBySeqno) < info.range.start) {
+             LOG(EXTENSION_LOG_WARNING, "pendingBackfill CheckpointManager::getSnapshotInfo() "
+ "checkpointList.back()->getNumItems() == 0 && lastBySeqno < info.range.start  setting "
+" info.range.start and info.range.end to %" PRIu64, lastBySeqno);
         info.range.start = lastBySeqno;
         info.range.end = lastBySeqno;
     }

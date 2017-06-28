@@ -279,7 +279,14 @@ ActiveStream::ActiveStream(EventuallyPersistentEngine* e,
     if (vbucket) {
         ReaderLockHolder rlh(vbucket->getStateLock());
         if (vbucket->getState() == vbucket_state_replica) {
+             producer->getLogger().log(EXTENSION_LOG_NOTICE,
+            "(vb %" PRIu16 ") pendingBackfill ActiveStream constructor. "
+            " calling getSnapshotInfo",vb);
             snapshot_info_t info = vbucket->checkpointManager.getSnapshotInfo();
+            producer->getLogger().log(EXTENSION_LOG_NOTICE,
+            "(vb %" PRIu16 ") pendingBackfill ActiveStream constructor. "
+            " called getSnapshotInfo info.range.end=%" PRIu64 " en_seqno=%" PRIu64 " curChkSeqno=%" PRIu64,
+            vb, info.range.end, en_seqno, curChkSeqno.load());
             if (info.range.end > en_seqno) {
                 end_seqno_ = info.range.end;
             }
@@ -388,6 +395,15 @@ void ActiveStream::registerCursor(CheckpointManager& chkptmgr,
          * seqno.
          */
         if (result.first - 1 > startBySeqno) {
+             producer->getLogger().log(EXTENSION_LOG_WARNING,
+                                  "(vb %" PRIu16 ") pendingBackfill registerCursor setting pendingBackfill=true. result.first = %llu "
+                                  "startBySeqno = %" PRIu64 " curChkSeqno = %" PRIu64,
+                                  vb_, result.first, startBySeqno, curChkSeqno.load());
+                                  
+            std::stringstream buffer;
+            chkptmgr.dump(buffer);
+            producer->getLogger().log(EXTENSION_LOG_WARNING,
+                                   "(vb %" PRIu16 ") pendingBackfill buffer:%s",vb_, buffer.str().c_str());
             pendingBackfill = true;
         }
         curChkSeqno = result.first;
@@ -636,6 +652,10 @@ DcpResponse* ActiveStream::backfillPhase(std::lock_guard<std::mutex>& lh) {
         // The previous backfill has completed.  Check to see if another
         // backfill needs to be scheduled.
         if (pendingBackfill) {
+            producer->getLogger().log(EXTENSION_LOG_NOTICE,
+                                  "(vb %" PRIu16 ") pendingBackfill "
+                                  "ActiveStream::backfillPhase calling  scheduleBackfill_UNLOCKED(true)", vb_);
+                        
             scheduleBackfill_UNLOCKED(true);
             pendingBackfill = false;
         } else {
@@ -663,6 +683,9 @@ DcpResponse* ActiveStream::inMemoryPhase() {
         endStream(END_STREAM_OK);
     } else if (readyQ.empty()) {
         if (pendingBackfill) {
+             producer->getLogger().log(EXTENSION_LOG_NOTICE,
+                                  "(vb %" PRIu16 ") pendingBackfill "
+                                  "ActiveStream::inMemoryPhase calling  transitionState(StreamState::Backfilling)", vb_);
             // Moving the state from InMemory to Backfilling will result in a
             // backfill being scheduled
             transitionState(StreamState::Backfilling);
@@ -1151,6 +1174,13 @@ void ActiveStream::endStream(end_stream_status_t reason) {
 }
 
 void ActiveStream::scheduleBackfill_UNLOCKED(bool reschedule) {
+
+     producer->getLogger().log(EXTENSION_LOG_NOTICE,
+                                  "(vb %" PRIu16 ")  "
+                                  "pendingBackfill scheduleBackfill_UNLOCKED; "
+                                  "lastReadSeqno %" PRIu64 ", reschedule flag "
+                                  ": %s", vb_, lastReadSeqno.load(),
+                                  reschedule ? "True" : "False");
     if (isBackfillTaskRunning) {
         producer->getLogger().log(EXTENSION_LOG_NOTICE,
                                   "(vb %" PRIu16 ") Skipping "
@@ -1204,6 +1234,13 @@ void ActiveStream::scheduleBackfill_UNLOCKED(bool reschedule) {
                     vbucket->checkpointManager.registerCursorBySeqno(
                             name_, lastReadSeqno.load(),
                             MustSendCheckpointEnd::NO);
+                   producer->getLogger().log(EXTENSION_LOG_WARNING,
+                                  "(vb %" PRIu16 ") pendingBackfill scheduleBackfill registerCursorBySeqno "
+                                  "curChkSeqno : %" PRIu64 ", "
+                                  "tryBackfill : %s",
+                                  vb_, curChkSeqno.load(),
+                                  tryBackfill ? "True" : "False");
+
         } catch(std::exception& error) {
             producer->getLogger().log(EXTENSION_LOG_WARNING,
                                       "(vb %" PRIu16 ") Failed to register "
@@ -1226,23 +1263,45 @@ void ActiveStream::scheduleBackfill_UNLOCKED(bool reschedule) {
          * to a memory snapshot. The backfill task will always make sure that
          * the backfill end seqno is contained in the backfill.
          */
+
+          producer->getLogger().log(EXTENSION_LOG_WARNING,
+                                  "(vb %" PRIu16 ") pendingBackfill scheduleBackfill setting backfillEnd "
+                                  "backfillStart : %" PRIu64 ", "
+                                  "curChkSeqno : %" PRIu64 "end_seqno_ : %"PRIu64,
+                                  vb_, backfillStart, curChkSeqno.load(),end_seqno_);
         if (backfillStart < curChkSeqno) {
             if (curChkSeqno > end_seqno_) {
                 /* Backfill only is enough */
                 backfillEnd = end_seqno_;
+                 producer->getLogger().log(EXTENSION_LOG_WARNING,
+                                  "(vb %" PRIu16 ") pendingBackfill scheduleBackfill setting backfillEnd to end_seqno %" PRIu64, backfillEnd);
             } else {
                 /* Backfill + in-memory streaming */
                 backfillEnd = curChkSeqno - 1;
+                producer->getLogger().log(EXTENSION_LOG_WARNING,
+                                  "(vb %" PRIu16 ") pendingBackfill scheduleBackfill setting backfillEnd to curChkSeqno - 1 %" PRIu64, backfillEnd);
             }
         }
     }
 
     if (backfillStart <= backfillEnd && tryBackfill) {
-        producer->getLogger().log(EXTENSION_LOG_NOTICE,
-                                  "(vb %" PRIu16 ") Scheduling backfill "
-                                  "from %" PRIu64 " to %" PRIu64 ", reschedule "
-                                  "flag : %s", vb_, backfillStart, backfillEnd,
-                                  reschedule ? "True" : "False");
+           producer->getLogger().log(EXTENSION_LOG_NOTICE,
+                                      "(vb %" PRIu16 ") pendingBackfill Did will schedule backfill "
+                                      "tryBackfill : True; "
+                                      "backfillStart : %" PRIu64 ", "
+                                      "backfillEnd : %" PRIu64 ", "
+                                      "flags_ : %" PRIu32 ", "
+                                      "start_seqno_ : %" PRIu64 ", "
+                                      "end_seqno_ : %" PRIu64 ", "
+                                      "lastReadSeqno : %" PRIu64 ", "
+                                      "lastSentSeqno : %" PRIu64 ", "
+                                      "curChkSeqno : %" PRIu64 ", "
+                                      "itemsReady : %s",
+                                      vb_, backfillStart, backfillEnd, flags_,
+                                      start_seqno_, end_seqno_,
+                                      lastReadSeqno.load(),
+                                      lastSentSeqno.load(), curChkSeqno.load(),
+                                      itemsReady ? "True" : "False");
         producer->scheduleBackfillManager(
                 *vbucket, this, backfillStart, backfillEnd);
         isBackfillTaskRunning.store(true);
@@ -1250,7 +1309,7 @@ void ActiveStream::scheduleBackfill_UNLOCKED(bool reschedule) {
         if (reschedule) {
             // Infrequent code path, see comment below.
             producer->getLogger().log(EXTENSION_LOG_NOTICE,
-                                      "(vb %" PRIu16 ") Did not schedule "
+                                      "(vb %" PRIu16 ") pendingBackfill Did not schedule "
                                       "backfill with reschedule : True, "
                                       "tryBackfill : True; "
                                       "backfillStart : %" PRIu64 ", "
@@ -1320,7 +1379,7 @@ void ActiveStream::scheduleBackfill_UNLOCKED(bool reschedule) {
 bool ActiveStream::handleSlowStream() {
     LockHolder lh(streamMutex);
     producer->getLogger().log(EXTENSION_LOG_NOTICE,
-                              "(vb %" PRIu16 ") Handling slow stream; "
+                              "(vb %" PRIu16 ") pendingBackfill Handling slow stream; "
                               "state_ : %s, "
                               "lastReadSeqno : %" PRIu64 ", "
                               "lastSentSeqno : %" PRIu64 ", "
@@ -1335,6 +1394,8 @@ bool ActiveStream::handleSlowStream() {
         case StreamState::Backfilling:
         case StreamState::InMemory:
             /* Drop the existing cursor and set pending backfill */
+            producer->getLogger().log(EXTENSION_LOG_NOTICE,
+                              "(vb %" PRIu16 ") pendingBackfill dropping CheckpointCursor",vb_);
             status = dropCheckpointCursor_UNLOCKED();
             pendingBackfill = true;
             return status;

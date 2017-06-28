@@ -88,6 +88,9 @@ backfill_status_t DCPBackfillMemory::run() {
     stream->incrBackfillRemaining(items.size());
 
     /* Mark disk snapshot */
+        LOG(EXTENSION_LOG_WARNING,
+                                "(vb %d) pendingBackfill DCPBackfillMemory::run calling markDiskSnapshot "
+                                "startSeqno = %" PRIu64 " adjustedEndSeqno =%" PRIu64, getVBucketId(), startSeqno, adjustedEndSeqno);
     stream->markDiskSnapshot(startSeqno, adjustedEndSeqno);
 
     /* Move every item to the stream */
@@ -197,6 +200,9 @@ backfill_status_t DCPBackfillMemoryBuffered::create(EphemeralVBucket& evb) {
                     std::min(endSeqno, static_cast<uint64_t>(rangeItr.back()));
 
             /* Mark disk snapshot */
+             LOG(EXTENSION_LOG_WARNING,
+                                "(vb %d) pendingBackfill DCPBackfillMemoryBuffered::create calling markDiskSnapshot "
+                                "startSeqno = %" PRIu64 " endSeqno =%" PRIu64, getVBucketId(), startSeqno, endSeqno);
             stream->markDiskSnapshot(startSeqno, endSeqno);
 
             /* Change the backfill state */

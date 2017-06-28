@@ -862,6 +862,7 @@ public:
     }
 
     void dump() const;
+    void dump(std::stringstream& buffer);
 
     static const std::string pCursorName;
 

@@ -187,6 +187,9 @@ backfill_status_t DCPBackfillDisk::create() {
 
     if (scanCtx) {
         stream->incrBackfillRemaining(scanCtx->documentCount);
+        stream->getLogger().log(EXTENSION_LOG_WARNING,
+                                "(vb %d) pendingBackfill DCPBackfillDisk::create calling markDiskSnapshot "
+                                "startSeqno = %" PRIu64 " maxSeqno =%" PRIu64, vbid, startSeqno, scanCtx->maxSeqno);
         stream->markDiskSnapshot(startSeqno, scanCtx->maxSeqno);
         transitionState(backfill_state_scanning);
     } else {
