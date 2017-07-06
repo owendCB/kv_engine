@@ -370,7 +370,9 @@ void ActiveStream::registerCursor(CheckpointManager& chkptmgr,
                 name_,
                 startBySeqno,
                 MustSendCheckpointEnd::NO);
-
+        if (result.first - 1 > startBySeqno && result.second) {
+            pendingBackfill = true;
+        }
         curChkSeqno = result.first;
     } catch(std::exception& error) {
         producer->getLogger().log(EXTENSION_LOG_WARNING,
