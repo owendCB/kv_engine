@@ -61,7 +61,7 @@ bool ItemFreqDecayerTask::run(void) {
         ss << prAdapter->getHashtablePosition() << ".";
     }
     ss << " Using chunk_duration=" << getChunkDuration().count() << " ms.";
-    LOG(EXTENSION_LOG_INFO, "%s", ss.str().c_str());
+    LOG(EXTENSION_LOG_WARNING, "%s", ss.str().c_str());
 
     // Prepare the underlying visitor.
     auto& visitor = getItemFreqDecayerVisitor();
@@ -91,7 +91,7 @@ bool ItemFreqDecayerTask::run(void) {
             std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     ss << " Took " << duration.count() << " us. to visit "
        << visitor.getVisitedCount() << " documents.";
-    LOG(EXTENSION_LOG_INFO, "%s", ss.str().c_str());
+    LOG(EXTENSION_LOG_WARNING, "%s", ss.str().c_str());
 
     // Delete(reset) visitor and allow to be notified if it finished.
     if (completed) {

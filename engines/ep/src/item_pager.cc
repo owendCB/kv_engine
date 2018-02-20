@@ -132,8 +132,11 @@ public:
             // We also want to update the threshold at periodic intervals.
             if (itemEviction.isLearning() ||
                 itemEviction.isRequiredToUpdate()) {
+                uint16_t per = std::ceil(percent * 100);
                 freqCounterThreshold =
-                        itemEviction.getFreqThreshold(std::ceil(percent * 100));
+                        itemEviction.getFreqThreshold(per);
+                LOG(EXTENSION_LOG_WARNING, "percent = %hu freqCounterThreshold = %hu",
+                    per, freqCounterThreshold);
             }
 
             if (v.getFreqCounterValue() <= freqCounterThreshold) {
