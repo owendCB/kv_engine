@@ -213,12 +213,12 @@ public:
         store.deleteExpiredItems(expired, ExpireBy::Pager);
 
         if (numEjected() > 0) {
-            LOG(EXTENSION_LOG_INFO, "Paged out %ld values", numEjected());
+            LOG(EXTENSION_LOG_WARNING, "Paged out %ld values", numEjected());
         }
 
         size_t num_expired = expired.size();
         if (num_expired > 0) {
-            LOG(EXTENSION_LOG_INFO, "Purged %ld expired items", num_expired);
+            LOG(EXTENSION_LOG_WARNING, "Purged %ld expired items", num_expired);
         }
 
         ejected = 0;
@@ -398,7 +398,7 @@ bool ItemPager::run(void) {
         std::stringstream ss;
         ss << "Using " << stats.getEstimatedTotalMemoryUsed()
            << " bytes of memory, paging out %0f%% of items." << std::endl;
-        LOG(EXTENSION_LOG_INFO, ss.str().c_str(), (toKill*100.0));
+        LOG(EXTENSION_LOG_WARNING, ss.str().c_str(), (toKill*100.0));
 
         // compute active vbuckets evicition bias factor
         Configuration& cfg = engine.getConfiguration();
