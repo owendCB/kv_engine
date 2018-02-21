@@ -127,16 +127,22 @@ public:
         }
         case HashTable::EvictionPolicy::statisticalCounter:
         {
-            itemEviction.addValueToFreqHistogram(v.getFreqCounterValue());
+            if (v.eligibleForEviction(store.getItemEvictionPolicy())) {
+                itemEviction.addValueToFreqHistogram(v.getFreqCounterValue());
+            } else {
+                itemEviction.addValueToFreqHistogram(255);
+            }
             // Whilst we are learning it is worth always updating the threshold.
             // We also want to update the threshold at periodic intervals.
             if (itemEviction.isLearning() ||
                 itemEviction.isRequiredToUpdate()) {
-                uint16_t per = std::ceil(percent * 100);
+                auto per = percent * 100.0;
                 freqCounterThreshold =
                         itemEviction.getFreqThreshold(per);
-                LOG(EXTENSION_LOG_WARNING, "percent = %hu freqCounterThreshold = %hu",
+                LOG(EXTENSION_LOG_WARNING, "percent = %f freqCounterThreshold = %hu",
                     per, freqCounterThreshold);
+                itemEviction.getFreqThreshold(per);
+
             }
 
             if (v.getFreqCounterValue() <= freqCounterThreshold) {
