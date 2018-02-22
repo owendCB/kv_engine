@@ -150,6 +150,32 @@ public:
                 itemEviction.isRequiredToUpdate()) {
                 freqCounterThreshold =
                         itemEviction.getFreqThreshold(percent * 100.0);
+                LOG(EXTENSION_LOG_WARNING, "Eviction: Setting freqCounterThreshold= %u percent=%f",
+                    freqCounterThreshold,
+                    percent);
+            }
+
+            if (v.getFreqCounterValue() == 0) {
+                LOG(EXTENSION_LOG_WARNING, "Eviction: freqCounterValue == 0");
+            }
+            if (v.isTempItem()) {
+                LOG(EXTENSION_LOG_WARNING, "Eviction: isTempItem count = %d",
+                    v.getFreqCounterValue());
+            }
+            if (v.isTempInitialItem()) {
+                LOG(EXTENSION_LOG_WARNING,
+                    "Eviction: isTempInitialItem count = %d",
+                    v.getFreqCounterValue());
+            }
+            if (v.isTempNonExistentItem()) {
+                LOG(EXTENSION_LOG_WARNING,
+                    "Eviction: isTempNonExistentItem count = %d",
+                    v.getFreqCounterValue());
+            }
+            if (v.isTempDeletedItem()) {
+                LOG(EXTENSION_LOG_WARNING,
+                    "Eviction: isTempDeletedItem count = %d",
+                    v.getFreqCounterValue());
             }
 
             if (v.getFreqCounterValue() <= freqCounterThreshold) {
@@ -229,12 +255,12 @@ public:
         store.deleteExpiredItems(expired, ExpireBy::Pager);
 
         if (numEjected() > 0) {
-            LOG(EXTENSION_LOG_INFO, "Paged out %ld values", numEjected());
+            LOG(EXTENSION_LOG_WARNING, "Eviction: Paged out %ld values", numEjected());
         }
 
         size_t num_expired = expired.size();
         if (num_expired > 0) {
-            LOG(EXTENSION_LOG_INFO, "Purged %ld expired items", num_expired);
+            LOG(EXTENSION_LOG_WARNING, "Eviction: Purged %ld expired items", num_expired);
         }
 
         ejected = 0;
@@ -412,9 +438,9 @@ bool ItemPager::run(void) {
         double toKill = (current - static_cast<double>(lower)) / current;
 
         std::stringstream ss;
-        ss << "Using " << stats.getEstimatedTotalMemoryUsed()
+        ss << "Eviction: Using " << stats.getEstimatedTotalMemoryUsed()
            << " bytes of memory, paging out %0f%% of items." << std::endl;
-        LOG(EXTENSION_LOG_INFO, ss.str().c_str(), (toKill*100.0));
+        LOG(EXTENSION_LOG_WARNING, ss.str().c_str(), (toKill*100.0));
 
         // compute active vbuckets evicition bias factor
         Configuration& cfg = engine.getConfiguration();
