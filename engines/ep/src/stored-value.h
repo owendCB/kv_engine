@@ -20,6 +20,7 @@
 #include "config.h"
 
 #include "blob.h"
+#include "item_eviction.h"
 #include "item_pager.h"
 #include "storeddockey.h"
 #include "tagged_ptr.h"
@@ -492,6 +493,19 @@ public:
     /// Discard the value from this document.
     void resetValue() {
         value.reset();
+        setFreqCounterValue(ItemEviction::initialFreqCount);
+    }
+
+    void resetwithCompressedValue(TaggedPtr<Blob> data) {
+        auto freqCount = getFreqCounterValue();
+        value.reset(data);
+        setFreqCounterValue(freqCount);
+    }
+
+    void resetValueWithCopy(const value_t& other) {
+        auto freqCount = getFreqCounterValue();
+        value.reset(other);
+        setFreqCounterValue(freqCount);
     }
 
     /**

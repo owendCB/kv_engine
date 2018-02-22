@@ -91,6 +91,7 @@ StoredValue::StoredValue(const StoredValue& other, UniquePtr n, EPStats& stats)
     setNewCacheItem(other.isNewCacheItem());
     setOrdered(other.isOrdered());
     setNru(other.getNru());
+    setFreqCounterValue(other.getFreqCounterValue());
     setResident(other.isResident());
     setStale(false);
     // Placement-new the key which lives in memory directly after this
@@ -162,6 +163,7 @@ void StoredValue::restoreValue(const Item& itm) {
     datatype = itm.getDataType();
     setDeletedPriv(itm.isDeleted());
     value = itm.getValue();
+    setFreqCounterValue(ItemEviction::initialFreqCount);
     setResident(true);
 }
 
@@ -182,6 +184,7 @@ void StoredValue::restoreMeta(const Item& itm) {
     if (getNru() == MAX_NRU_VALUE) {
         setNru(INITIAL_NRU_VALUE);
     }
+    setFreqCounterValue(ItemEviction::initialFreqCount);
 }
 
 bool StoredValue::del() {
@@ -243,7 +246,7 @@ void StoredValue::reallocate() {
     // Allocate a new Blob for this stored value; copy the existing Blob to
     // the new one and free the old.
     value_t new_val(Blob::Copy(*value));
-    value.reset(new_val);
+    resetValueWithCopy(new_val);
 }
 
 void StoredValue::Deleter::operator()(StoredValue* val) {
@@ -344,7 +347,7 @@ bool StoredValue::compressValue() {
             Blob* data = nullptr;
             data = Blob::New(deflated.data(), deflated.size());
             datatype |= PROTOCOL_BINARY_DATATYPE_SNAPPY;
-            value.reset(TaggedPtr<Blob>(data));
+            resetwithCompressedValue(TaggedPtr<Blob>(data));
         } else {
             return false;
         }

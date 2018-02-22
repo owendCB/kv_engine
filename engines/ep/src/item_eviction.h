@@ -14,6 +14,7 @@
  *   See the License for the specific language governing permissions and
  *   limitations under the License.
  */
+#pragma once
 
 #include <atomic>
 #include <cstdlib> // Required due to the use of free
