@@ -54,7 +54,7 @@ static const ssize_t prime_size_table[] = {
  * value of a uint16_t is 65,536).  Through experimentation this was found to be
  * achieved with an incFactor of 0.012.
  */
-static const double freqCounterIncFactor = 0.012;
+static const double freqCounterIncFactor = 100.0;
 
 
 std::ostream& operator<<(std::ostream& os, const HashTable::Position& pos) {
