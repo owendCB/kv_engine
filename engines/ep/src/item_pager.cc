@@ -162,6 +162,13 @@ public:
                 itemEviction.isRequiredToUpdate()) {
                 freqCounterThreshold =
                         itemEviction.getFreqThreshold(percent * 100.0);
+                if (currentBucket->getState() == vbucket_state_active) {
+                    auto t = freqCounterThreshold * 0.8;
+                    freqCounterThreshold = std::floor(t);
+                } else {
+                    auto t = freqCounterThreshold * 1.2;
+                    freqCounterThreshold = std::ceil(t);
+                }
             }
 
             return true;
@@ -318,16 +325,17 @@ private:
     }
 
     void adjustPercent(double prob, vbucket_state_t state) {
-        if (state == vbucket_state_replica ||
-            state == vbucket_state_dead)
-        {
-            // replica items should have higher eviction probability
-            double p = prob*(2 - activeBias);
-            percent = p < 0.9 ? p : 0.9;
-        } else {
-            // active items have lower eviction probability
-            percent = prob*activeBias;
-        }
+        percent = prob;
+        // if (state == vbucket_state_replica ||
+        //     state == vbucket_state_dead)
+        // {
+        //     // replica items should have higher eviction probability
+        //     double p = prob*(2 - activeBias);
+        //     percent = p < 0.9 ? p : 0.9;
+        // } else {
+        //     // active items have lower eviction probability
+        //     percent = prob*activeBias;
+        // }
     }
 
     bool doEviction(const HashTable::HashBucketLock& lh, StoredValue* v) {
