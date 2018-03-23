@@ -458,6 +458,7 @@ StoredValue* HashTable::unlocked_find(const DocKey& key,
 
                 if (updatedFreqCounterValue ==
                     std::numeric_limits<uint8_t>::max()) {
+                    LOG(EXTENSION_LOG_WARNING, "owend: saturated!!!!!");
                     // Invoke the registered callback function which
                     // wakeups the ItemFreqDecayer task.
                     frequencyCounterSaturated();

@@ -46,7 +46,8 @@ public:
                 std::unique_ptr<VBucketVisitor> v,
                 const char* l,
                 double sleep = 0,
-                bool shutdown = false);
+                bool shutdown = false,
+                bool activeLast = false);
 
     cb::const_char_buffer getDescription() {
         std::unique_lock<std::mutex> lock(description.mutex);
@@ -485,7 +486,8 @@ public:
                  const char* lbl,
                  TaskId id,
                  double sleepTime,
-                 std::chrono::microseconds maxExpectedDuration);
+                 std::chrono::microseconds maxExpectedDuration,
+                 bool activeLast=false);
 
     Position pauseResumeVisit(PauseResumeVBVisitor& visitor,
                               Position& start_pos);
@@ -854,6 +856,11 @@ public:
     /// set the buckets maxTtl
     void setMaxTtl(size_t max);
 
+    size_t getNumOfVBuckets(vbucket_state_t state) const {
+        std::unique_lock<std::mutex> vbset(vbsetMutex);
+        return vbMap.getNumOfVBuckets(state);
+    }
+
 protected:
     // During the warmup phase we might want to enable external traffic
     // at a given point in time.. The LoadStorageKvPairCallback will be
@@ -950,7 +957,7 @@ protected:
         const void* cookie;
     } deleteAllTaskCtx;
 
-    std::mutex vbsetMutex;
+    mutable std::mutex vbsetMutex;
     uint32_t bgFetchDelay;
     double backfillMemoryThreshold;
     struct ExpiryPagerDelta {

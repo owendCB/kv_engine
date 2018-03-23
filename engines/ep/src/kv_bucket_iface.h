@@ -481,7 +481,8 @@ public:
                          const char* lbl,
                          TaskId id,
                          double sleepTime,
-                         std::chrono::microseconds maxExpectedDuration) = 0;
+                         std::chrono::microseconds maxExpectedDuration,
+                         bool activeLast=false) = 0;
 
     /**
      * Visit the items in this epStore, starting the iteration from the

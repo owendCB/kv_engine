@@ -91,6 +91,8 @@ public:
     void setHLCDriftAheadThreshold(std::chrono::microseconds threshold);
     void setHLCDriftBehindThreshold(std::chrono::microseconds threshold);
 
+    size_t getNumOfVBuckets(vbucket_state_t state) const;
+
 private:
 
     std::vector<std::unique_ptr<KVShard>> shards;

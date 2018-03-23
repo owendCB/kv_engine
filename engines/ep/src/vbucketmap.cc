@@ -155,6 +155,17 @@ void VBucketMap::setHLCDriftBehindThreshold(std::chrono::microseconds threshold)
     }
 }
 
+size_t VBucketMap::getNumOfVBuckets(vbucket_state_t state) const {
+    size_t count = 0;
+    for (id_type ii = 0; ii < size; ++ii) {
+        VBucketPtr b = getBucket(ii);
+        if (b && b->getState() == state) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 void VBucketMap::VBucketConfigChangeListener::sizeValueChanged(const std::string &key,
                                                    size_t value) {
     if (key == "hlc_drift_ahead_threshold_us") {

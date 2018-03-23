@@ -77,7 +77,7 @@ public:
                   std::atomic<item_pager_phase>* phase)
         : store(s),
           stats(st),
-          percent(pcnt),
+          originalpercent(pcnt),
           activeBias(bias),
           ejected(0),
           startTime(ep_real_time()),
@@ -133,6 +133,9 @@ public:
              * add it to the histogram we want to use the original value.
              */
             auto storedValueFreqCounter = v.getFreqCounterValue();
+            if (storedValueFreqCounter > 0) {
+                v.setFreqCounterValue(storedValueFreqCounter - 1);
+            }
             if (storedValueFreqCounter <= freqCounterThreshold) {
                 /*
                  * If the storedValue is eligible for eviction then add its
@@ -162,6 +165,12 @@ public:
                 itemEviction.isRequiredToUpdate()) {
                 freqCounterThreshold =
                         itemEviction.getFreqThreshold(percent * 100.0);
+
+                if (currentBucket->getState() == vbucket_state_active) {
+                LOG(EXTENSION_LOG_WARNING, "owend: active freqCounterThreshold %d", freqCounterThreshold);
+                } else {
+                    LOG(EXTENSION_LOG_WARNING, "owend: replica freqCounterThreshold %d", freqCounterThreshold);
+                }
             }
 
             return true;
@@ -176,7 +185,7 @@ public:
         removeClosedUnrefCheckpoints(vb);
 
         // fast path for expiry item pager
-        if (percent <= 0 || !pager_phase) {
+        if (originalpercent <= 0 || !pager_phase) {
             if (vBucketFilter(vb->getId())) {
                 currentBucket = vb;
                 // EvictionPolicy is not required when running expiry item
@@ -199,8 +208,8 @@ public:
         }
 
         if (current > lower) {
-            double p = (current - static_cast<double>(lower)) / current;
-            adjustPercent(p, vb->getState());
+            //double p = (current - static_cast<double>(lower)) / current;
+            adjustPercent(originalpercent, vb);
             if (vBucketFilter(vb->getId())) {
                 currentBucket = vb;
                 itemEviction.reset();
@@ -238,12 +247,12 @@ public:
         store.deleteExpiredItems(expired, ExpireBy::Pager);
 
         if (numEjected() > 0) {
-            LOG(EXTENSION_LOG_INFO, "Paged out %ld values", numEjected());
+            LOG(EXTENSION_LOG_WARNING, "owend: Paged out %ld values", numEjected());
         }
 
         size_t num_expired = expired.size();
         if (num_expired > 0) {
-            LOG(EXTENSION_LOG_INFO, "Purged %ld expired items", num_expired);
+            LOG(EXTENSION_LOG_WARNING, "owend: Purged %ld expired items", num_expired);
         }
 
         ejected = 0;
@@ -317,16 +326,54 @@ private:
         }
     }
 
-    void adjustPercent(double prob, vbucket_state_t state) {
-        if (state == vbucket_state_replica ||
-            state == vbucket_state_dead)
-        {
-            // replica items should have higher eviction probability
-            double p = prob*(2 - activeBias);
-            percent = p < 0.9 ? p : 0.9;
-        } else {
-            // active items have lower eviction probability
-            percent = prob*activeBias;
+    void adjustPercent(double prob, VBucketPtr& vb) {
+        auto state = vb->getState();
+        switch (vb->ht.getEvictionPolicy()) {
+        case HashTable::EvictionPolicy::lru2Bit: {
+            if (state == vbucket_state_replica || state == vbucket_state_dead) {
+                // replica items should have higher eviction probability
+                double p = prob * (2 - activeBias);
+                percent = p < 0.9 ? p : 0.9;
+            } else {
+                // active items have lower eviction probability
+                percent = prob * activeBias;
+            }
+            return;
+        }
+//        case HashTable::EvictionPolicy::statisticalCounter: {
+//            auto numOfActiveAndReplicaVBuckets =
+//                    store.getNumOfVBuckets(vbucket_state_active) +
+//                    store.getNumOfVBuckets(vbucket_state_replica);
+//            double percentActive = store.getNumOfVBuckets(vbucket_state_active) /
+//                                   (double)(numOfActiveAndReplicaVBuckets);
+//            percentActive*= 0.5;
+//            auto percentReplica = 1 - percentActive;
+//            if (state == vbucket_state_active) {
+//                percent = prob * percentActive;
+//            } else {
+//                percent = prob * (1 + percentReplica);
+//            }
+//            return;
+//        }
+        case HashTable::EvictionPolicy::statisticalCounter: {
+            if (state == vbucket_state_active) {
+                percent = prob * activeBias;
+                LOG(EXTENSION_LOG_WARNING, "owend: adjustPercent: active prob=%f percent=%f", prob, percent);
+            } else {
+                auto numOfActiveAndReplicaVBuckets =
+                        store.getNumOfVBuckets(vbucket_state_active) + store.getNumOfVBuckets(
+                                vbucket_state_replica);
+                double percentReplica =
+                        store.getNumOfVBuckets(vbucket_state_replica) / (double) (numOfActiveAndReplicaVBuckets);
+                percent = prob / percentReplica;
+                LOG(EXTENSION_LOG_WARNING, "owend: adjustPercent: replica prob=%f percentReplica=%f percent=%f",
+                    prob, percentReplica, percent);
+            }
+            return;
+        }
+
+            throw std::invalid_argument(
+                    "adjustPercent - EvictionPolicy is invalid");
         }
     }
 
@@ -356,6 +403,7 @@ private:
     KVBucket& store;
     EPStats &stats;
     double percent;
+    double originalpercent;
     double activeBias;
     size_t ejected;
     time_t startTime;
@@ -390,6 +438,7 @@ ItemPager::ItemPager(EventuallyPersistentEngine& e, EPStats& st)
 }
 
 bool ItemPager::run(void) {
+    LOG(EXTENSION_LOG_WARNING, "owend: ItemPager::run");
     TRACE_EVENT0("ep-engine/task", "ItemPager");
 
     // Setup so that we will sleep before clearing notified.
@@ -425,9 +474,9 @@ bool ItemPager::run(void) {
         double toKill = (current - static_cast<double>(lower)) / current;
 
         std::stringstream ss;
-        ss << "Using " << stats.getEstimatedTotalMemoryUsed()
+        ss << "owend: Using " << stats.getEstimatedTotalMemoryUsed()
            << " bytes of memory, paging out %0f%% of items." << std::endl;
-        LOG(EXTENSION_LOG_INFO, ss.str().c_str(), (toKill*100.0));
+        LOG(EXTENSION_LOG_WARNING, ss.str().c_str(), (toKill*100.0));
 
         // compute active vbuckets evicition bias factor
         Configuration& cfg = engine.getConfiguration();
@@ -450,7 +499,8 @@ bool ItemPager::run(void) {
                         "Item pager",
                         TaskId::ItemPagerVisitor,
                         /*sleepTime*/ 0,
-                        maxExpectedDuration);
+                        maxExpectedDuration,
+                        true);
     }
 
     return true;

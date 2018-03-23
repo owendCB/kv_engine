@@ -112,7 +112,7 @@ protected:
                 std::get<1>(GetParam()) + ";mem_high_wat=" +
                 std::get<2>(GetParam());
 
-        config_string += ";bucket_type=ephemeral";
+        config_string += ";bucket_type=persistent";
         STParameterizedEvictionTest::SetUp();
 
         // Sanity check - need memory tracker to be able to check our memory
@@ -143,7 +143,7 @@ protected:
         // and two in futureQ EphTombstoneHTCleaner and ItemPager)
         auto& lpNonioQ = *task_executor->getLpTaskQ()[NONIO_TASK_IDX];
         EXPECT_EQ(0, lpNonioQ.getReadyQueueSize());
-        EXPECT_EQ(2, lpNonioQ.getFutureQueueSize());
+        EXPECT_EQ(1, lpNonioQ.getFutureQueueSize());
 
         // We shouldn't be able to schedule the Item Pager task yet as it's not
         // ready.
@@ -192,6 +192,10 @@ protected:
         // Fixup noOfDocs for last loop iteration.
         --noOfDocs;
 
+        for (int ii = 0; ii < noOfVBs; ii++) {
+            store->getVBucket(ii)->checkpointManager->createNewCheckpoint();
+        }
+
         auto& stats = engine->getEpStats();
         EXPECT_GT(stats.getEstimatedTotalMemoryUsed(),
                   stats.getMaxDataSize() * 0.8)
@@ -199,6 +203,11 @@ protected:
                    "TMPFAIL";
         EXPECT_GT(stats.getEstimatedTotalMemoryUsed(), stats.mem_low_wat.load())
                 << "Expected to exceed low watermark after hitting TMPFAIL";
+
+        for (int ii = 0; ii < noOfVBs; ii++) {
+            while (getEPBucket().flushVBucket(ii).second != 0)
+                ;
+        }
     }
 
     /**
@@ -266,6 +275,10 @@ protected:
             int vbucketcount = 0;
             while ((current > lower) && vbucketcount < noOfVBs) {
                 runNextTask(lpNonioQ);
+                for (int ii = 0; ii < noOfVBs; ii++) {
+                    while (getEPBucket().flushVBucket(ii).second != 0)
+                        ;
+                }
                 vbucketcount++;
                 current = static_cast<double>(
                         stats.getEstimatedTotalMemoryUsed());
@@ -342,6 +355,11 @@ TEST_P(STHashTableEvictionTest, DISABLED_STHashTableEvictionItemPagerTest) {
     populateUntilTmpFail();
     printNoOfResidentDocs();
     accessPattern();
+
+    for (int ii = 0; ii < 2; ii++) {
+        store->setVBucketState(ii, vbucket_state_replica, false);
+    }
+
     eviction();
     auto evictedCount = residentOrEvicted();
     std::cout << "evictedCount = " << evictedCount << std::endl;

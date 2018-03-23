@@ -2119,9 +2119,10 @@ size_t KVBucket::visit(std::unique_ptr<VBucketVisitor> visitor,
                        const char* lbl,
                        TaskId id,
                        double sleepTime,
-                       std::chrono::microseconds maxExpectedDuration) {
+                       std::chrono::microseconds maxExpectedDuration,
+                       bool activeLast) {
     auto task = std::make_shared<VBCBAdaptor>(
-            this, id, std::move(visitor), lbl, sleepTime);
+            this, id, std::move(visitor), lbl, sleepTime, false, activeLast);
     task->setMaxExpectedDuration(maxExpectedDuration);
     return ExecutorPool::get()->schedule(task);
 }
@@ -2157,7 +2158,8 @@ VBCBAdaptor::VBCBAdaptor(KVBucket* s,
                          std::unique_ptr<VBucketVisitor> v,
                          const char* l,
                          double sleep,
-                         bool shutdown)
+                         bool shutdown,
+                         bool activeLast)
     : GlobalTask(&s->getEPEngine(), id, 0, shutdown),
       store(s),
       visitor(std::move(v)),
@@ -2165,11 +2167,37 @@ VBCBAdaptor::VBCBAdaptor(KVBucket* s,
       sleepTime(sleep),
       maxDuration(std::chrono::microseconds::max()),
       currentvb(0) {
+    if (activeLast) {
+        LOG(EXTENSION_LOG_WARNING,"owend: VBCBAdaptor activeLast = true");
+    } else {
+        LOG(EXTENSION_LOG_WARNING,"owend: VBCBAdaptor activeLast = false");
+    }
     updateDescription();
     const VBucketFilter& vbFilter = visitor->getVBucketFilter();
-    for (auto vbid : store->getVBuckets().getBuckets()) {
-        if (vbFilter(vbid)) {
-            vbList.push(vbid);
+    if (!activeLast) {
+        for (auto vbid : store->getVBuckets().getBuckets()) {
+            if (vbFilter(vbid)) {
+                vbList.push(vbid);
+            }
+        }
+    } else {
+        // Is a queue so push non-active on first
+        for (auto vbid : store->getVBuckets().getBuckets()) {
+            if (vbFilter(vbid)) {
+                VBucketPtr vb = store->getVBucket(vbid);
+                if (vb && vb->getState() != vbucket_state_active) {
+                    vbList.push(vbid);
+                }
+            }
+        }
+
+        for (auto vbid : store->getVBuckets().getBuckets()) {
+            if (vbFilter(vbid)) {
+                VBucketPtr vb = store->getVBucket(vbid);
+                if (vb && vb->getState() == vbucket_state_active) {
+                    vbList.push(vbid);
+                }
+            }
         }
     }
 }
