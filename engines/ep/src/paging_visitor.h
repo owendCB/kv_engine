@@ -49,6 +49,8 @@ public:
      * @param pause flag indicating if PagingVisitor can pause between vbucket
      *              visits
      * @param bias active vbuckets eviction probability bias multiplier (0-1)
+     * @param vbFilter the filter used to select which vbuckets to visit
+     * @param isEphemeral  boolean indicating if operating on ephemeral bucket
      * @param phase pointer to an item_pager_phase to be set
      */
     PagingVisitor(KVBucket& s,
@@ -58,7 +60,9 @@ public:
                   pager_type_t caller,
                   bool pause,
                   double bias,
-                  std::atomic<item_pager_phase>* phase);
+                  const VBucketFilter& vbFilter,
+                  std::atomic<item_pager_phase>* phase,
+                  bool isEphemeral);
 
     bool visit(const HashTable::HashBucketLock& lh, StoredValue& v) override;
 
@@ -103,6 +107,8 @@ private:
     ProcessClock::time_point taskStart;
     std::atomic<item_pager_phase>* pager_phase;
     VBucketPtr currentBucket;
+
+    bool isEphemeral;
 
     // Holds the data structures used during the selection of documents to
     // evict from the hash table.
