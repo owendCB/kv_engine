@@ -3663,6 +3663,27 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::doDcpStats(const void *cookie,
     return ENGINE_SUCCESS;
 }
 
+ENGINE_ERROR_CODE EventuallyPersistentEngine::doEvictionFreqStats(
+        const void* cookie, ADD_STAT add_stat) {
+    add_casted_stat("ep_active_or_pending_eviction_freq_values",
+                    stats.activeOrPendingEvictionFreqValuesHisto,
+                    add_stat,
+                    cookie);
+    add_casted_stat("ep_replica_eviction_freq_values",
+                    stats.replicaEvictionFreqValuesHisto,
+                    add_stat,
+                    cookie);
+    add_casted_stat("ep_active_or_pending_eviction_threshold_values",
+                    stats.activeOrPendingEvictionThresholdValuesHisto,
+                    add_stat,
+                    cookie);
+    add_casted_stat("ep_replica_eviction_threshold_values",
+                    stats.replicaEvictionThresholdValuesHisto,
+                    add_stat,
+                    cookie);
+    return ENGINE_SUCCESS;
+}
+
 ENGINE_ERROR_CODE EventuallyPersistentEngine::doKeyStats(const void *cookie,
                                                          ADD_STAT add_stat,
                                                          uint16_t vbid,
@@ -4079,6 +4100,8 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::getStats(const void* cookie,
         rv = doConnAggStats(cookie, add_stat, stat_key + 7, nkey - 7);
     } else if (statKey == "dcp") {
         rv = doDcpStats(cookie, add_stat);
+    } else if (statKey == "eviction-freq") {
+        rv = doEvictionFreqStats(cookie, add_stat);
     } else if (statKey == "hash") {
         rv = doHashStats(cookie, add_stat);
     } else if (statKey == "vbucket") {

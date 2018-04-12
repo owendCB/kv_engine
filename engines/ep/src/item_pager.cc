@@ -114,6 +114,7 @@ PagingVisitor::PagingVisitor(KVBucket& s,
              * add it to the histogram we want to use the original value.
              */
             auto storedValueFreqCounter = v.getFreqCounterValue();
+            bool evicted = true;
             if (storedValueFreqCounter <= freqCounterThreshold) {
                 /*
                  * If the storedValue is eligible for eviction then add its
@@ -128,15 +129,30 @@ PagingVisitor::PagingVisitor(KVBucket& s,
                  */
                 if (!doEviction(lh, &v)) {
                     storedValueFreqCounter = std::numeric_limits<uint8_t>::max();
+                    evicted = false;
                 }
             } else {
                 // If the storedValue is NOT eligible for eviction then
                 // we want to add the maximum value (255).
                 if (!currentBucket->eligibleToPageOut(lh, v)) {
                     storedValueFreqCounter = std::numeric_limits<uint8_t>::max();
+                    evicted = false;
                 }
             }
             itemEviction.addValueToFreqHistogram(storedValueFreqCounter);
+
+            bool isActiveOrPending =
+                    ((currentBucket->getState() == vbucket_state_active) ||
+                     (currentBucket->getState() == vbucket_state_pending));
+            if (evicted) {
+                if (isActiveOrPending) {
+                    stats.activeOrPendingEvictionFreqValuesHisto.add(
+                            storedValueFreqCounter);
+                } else {
+                    stats.replicaEvictionFreqValuesHisto.add(
+                            storedValueFreqCounter);
+                }
+            }
 
             // Whilst we are learning it is worth always updating the
             // threshold. We also want to update the threshold at periodic
@@ -145,6 +161,13 @@ PagingVisitor::PagingVisitor(KVBucket& s,
                 itemEviction.isRequiredToUpdate()) {
                 freqCounterThreshold =
                         itemEviction.getFreqThreshold(percent * 100.0);
+                if (isActiveOrPending) {
+                    stats.activeOrPendingEvictionThresholdValuesHisto.add(
+                            freqCounterThreshold);
+                } else {
+                    stats.replicaEvictionThresholdValuesHisto.add(
+                            freqCounterThreshold);
+                }
             }
 
             return true;

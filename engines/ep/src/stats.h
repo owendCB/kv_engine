@@ -378,6 +378,28 @@ public:
      */
     Histogram<size_t> getMultiBatchSizeHisto;
 
+    /**
+     * Histogram of frequency counts for items evicted from active or pending
+     * vbuckets.
+     */
+    Histogram<size_t> activeOrPendingEvictionFreqValuesHisto;
+
+    /**
+     * Histogram of frequency counts for items evicted from replica vbuckets.
+     */
+    Histogram<size_t> replicaEvictionFreqValuesHisto;
+
+    /**
+     * Histogram of eviction thresholds when evicting from active or pending
+     * vbuckets.
+     */
+    Histogram<size_t> activeOrPendingEvictionThresholdValuesHisto;
+
+    /**
+     * Histogram of eviction thresholds when evicting from replica vbuckets.
+     */
+    Histogram<size_t> replicaEvictionThresholdValuesHisto;
+
     //
     // Command timers
     //
@@ -510,6 +532,11 @@ public:
         getMultiHisto.reset();
         persistenceCursorGetItemsHisto.reset();
         dcpCursorsGetItemsHisto.reset();
+
+        activeOrPendingEvictionFreqValuesHisto.reset();
+        replicaEvictionFreqValuesHisto.reset();
+        activeOrPendingEvictionThresholdValuesHisto.reset();
+        replicaEvictionThresholdValuesHisto.reset();
     }
 
     // Used by stats logging infrastructure.
