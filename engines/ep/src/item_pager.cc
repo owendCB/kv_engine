@@ -56,7 +56,8 @@ PagingVisitor::PagingVisitor(KVBucket& s,
     : VBucketVisitor(vbFilter),
       store(s),
       stats(st),
-      percent(pcnt),
+      originalPercent(pcnt),
+      percent(0.0),
       activeBias(bias),
       ejected(0),
       startTime(ep_real_time()),
@@ -182,7 +183,7 @@ PagingVisitor::PagingVisitor(KVBucket& s,
         removeClosedUnrefCheckpoints(vb);
 
         // fast path for expiry item pager
-        if (percent <= 0 || !pager_phase) {
+        if (originalPercent <= 0 || !pager_phase) {
             if (vBucketFilter(vb->getId())) {
                 currentBucket = vb;
                 // EvictionPolicy is not required when running expiry item
@@ -205,8 +206,14 @@ PagingVisitor::PagingVisitor(KVBucket& s,
         }
 
         if (current > lower) {
-            double p = (current - static_cast<double>(lower)) / current;
-            adjustPercent(p, vb->getState());
+            double p;
+            if (vb->ht.getEvictionPolicy() ==
+                HashTable::EvictionPolicy::lru2Bit) {
+                p = (current - static_cast<double>(lower)) / current;
+            } else {
+                p = originalPercent;
+            }
+            adjustPercent(p, vb->getState(), vb->ht.getEvictionPolicy());
             if (vBucketFilter(vb->getId())) {
                 currentBucket = vb;
                 itemEviction.reset();
@@ -322,16 +329,46 @@ PagingVisitor::PagingVisitor(KVBucket& s,
         }
     }
 
-    void PagingVisitor::adjustPercent(double prob, vbucket_state_t state) {
-        if (state == vbucket_state_replica ||
-            state == vbucket_state_dead)
-        {
-            // replica items should have higher eviction probability
-            double p = prob*(2 - activeBias);
-            percent = p < 0.9 ? p : 0.9;
-        } else {
-            // active items have lower eviction probability
-            percent = prob*activeBias;
+    void PagingVisitor::adjustPercent(double prob,
+                                      vbucket_state_t state,
+                                      HashTable::EvictionPolicy policy) {
+        switch (policy) {
+        case HashTable::EvictionPolicy::lru2Bit: {
+            if (state == vbucket_state_replica || state == vbucket_state_dead) {
+                // replica items should have higher eviction probability
+                double p = prob * (2 - activeBias);
+                percent = p < 0.9 ? p : 0.9;
+            } else {
+                // active items have lower eviction probability
+                percent = prob * activeBias;
+            }
+            return;
+        }
+        case HashTable::EvictionPolicy::statisticalCounter: {
+            if ((state == vbucket_state_active) ||
+                (state == vbucket_state_pending)) {
+                percent = prob * activeBias;
+            } else {
+                auto numActiveVBuckets =
+                        store.getNumOfVBucketsInState(vbucket_state_active);
+                auto numPendingVBuckets =
+                        store.getNumOfVBucketsInState(vbucket_state_pending);
+                auto numReplicaVBuckets =
+                        store.getNumOfVBucketsInState(vbucket_state_replica);
+
+                auto totalNumOfVBuckets = numActiveVBuckets +
+                                          numPendingVBuckets +
+                                          numReplicaVBuckets;
+
+                auto percentReplica =
+                        numReplicaVBuckets / (double)(totalNumOfVBuckets);
+                percent = prob / percentReplica;
+            }
+            return;
+        }
+
+            throw std::invalid_argument(
+                    "adjustPercent - EvictionPolicy is invalid");
         }
     }
 

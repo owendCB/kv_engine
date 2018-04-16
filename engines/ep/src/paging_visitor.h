@@ -93,7 +93,9 @@ private:
     // @param vb  The vbucket whose eligible checkpoints are removed from.
     void removeClosedUnrefCheckpoints(VBucketPtr& vb);
 
-    void adjustPercent(double prob, vbucket_state_t state);
+    void adjustPercent(double prob,
+                       vbucket_state_t state,
+                       HashTable::EvictionPolicy policy);
 
     bool doEviction(const HashTable::HashBucketLock& lh, StoredValue* v);
 
@@ -101,6 +103,7 @@ private:
 
     KVBucket& store;
     EPStats& stats;
+    double originalPercent;
     double percent;
     double activeBias;
     size_t ejected;
