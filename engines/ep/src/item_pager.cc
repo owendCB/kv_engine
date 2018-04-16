@@ -115,7 +115,14 @@ PagingVisitor::PagingVisitor(KVBucket& s,
              * add it to the histogram we want to use the original value.
              */
             auto storedValueFreqCounter = v.getFreqCounterValue();
+
             bool evicted = true;
+
+
+            if (storedValueFreqCounter > 0) {
+                v.setFreqCounterValue(storedValueFreqCounter - 1);
+            }
+
             if (storedValueFreqCounter <= freqCounterThreshold) {
                 /*
                  * If the storedValue is eligible for eviction then add its
