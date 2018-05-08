@@ -30,10 +30,8 @@
  *
  * Each time a value is referenced in the hash table its frequency count
  * is incremented according to an 8 bit probabilistic counter.  The counter
- * behaviour is such that as the frequency increases (towards a maximum of
- * 255) it becomes increasingly harder to increment.  It is configured so
- * that a value must be referenced approximately 65K times before its
- * frequency count becomes saturated.
+ * behaviour is such that a value must be referenced approximately 65K times
+ * before its frequency count becomes saturated.
  *
  * During eviction we visit each item in the hash and build up a histogram of
  * frequency counts of the values.  So we have a sum of how many values have
@@ -91,9 +89,11 @@ public:
     static uint8_t convertFreqCountToNRUValue(uint8_t statCounter);
 
     // The initial frequency count that items should be set to when first
-    // added to the hash table.  It is not 0, as we want to ensure that we
-    // do not immediately evict items that we have just added.
-    static const uint8_t initialFreqCount = 4;
+    // added to the hash table.  It is set to 64, which corresponds to
+    // approximately 5% of the total number of counter 'increments' before
+    // the probabilistic counter is likely to be saturated. (i.e. will be
+    // saturated when counter is 'incremented' ~65K times)
+    static const uint8_t initialFreqCount = 64;
 
     // StatCounter: The number of frequencies that need to be added to the
     // frequency histogram before it is not necessary to recalculate the

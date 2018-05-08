@@ -70,6 +70,10 @@ protected:
     HashTable ht;
     Item item;
     StoredValue::UniquePtr sv;
+
+    // The initial frequency count assigned to new StoredValues.
+    // Used to compare against expected values in a range of test below.
+    uint8_t initialFreqCount{ItemEviction::initialFreqCount};
 };
 
 using ValueFactories =
@@ -245,7 +249,7 @@ TYPED_TEST(ValueTest, nru) {
  * Test the get / set of the frequency counter
  */
 TYPED_TEST(ValueTest, freqCounter) {
-    EXPECT_EQ(4, this->sv->getFreqCounterValue());
+    EXPECT_EQ(this->initialFreqCount, this->sv->getFreqCounterValue());
     this->sv->setFreqCounterValue(1);
     EXPECT_EQ(1, this->sv->getFreqCounterValue());
 }
@@ -263,7 +267,7 @@ TYPED_TEST(ValueTest, initialFreqCounterForTemp) {
 }
 
 TYPED_TEST(ValueTest, replaceValue) {
-    ASSERT_EQ(4, this->sv->getFreqCounterValue());
+    ASSERT_EQ(this->initialFreqCount, this->sv->getFreqCounterValue());
     this->sv->setFreqCounterValue(100);
     ASSERT_EQ(100, this->sv->getFreqCounterValue());
 
@@ -278,7 +282,7 @@ TYPED_TEST(ValueTest, replaceValue) {
 }
 
 TYPED_TEST(ValueTest, restoreValue) {
-    ASSERT_EQ(4, this->sv->getFreqCounterValue());
+    ASSERT_EQ(this->initialFreqCount, this->sv->getFreqCounterValue());
     this->sv->setFreqCounterValue(100);
     ASSERT_EQ(100, this->sv->getFreqCounterValue());
 
@@ -287,11 +291,11 @@ TYPED_TEST(ValueTest, restoreValue) {
                       std::string("value").c_str());
 
     this->sv->restoreValue(itm);
-    EXPECT_EQ(4, this->sv->getFreqCounterValue());
+    EXPECT_EQ(64, this->sv->getFreqCounterValue());
 }
 
 TYPED_TEST(ValueTest, restoreMeta) {
-    ASSERT_EQ(4, this->sv->getFreqCounterValue());
+    ASSERT_EQ(this->initialFreqCount, this->sv->getFreqCounterValue());
     this->sv->setFreqCounterValue(100);
     ASSERT_EQ(100, this->sv->getFreqCounterValue());
 
@@ -300,7 +304,7 @@ TYPED_TEST(ValueTest, restoreMeta) {
                       std::string("value").c_str());
 
     this->sv->restoreMeta(itm);
-    EXPECT_EQ(4, this->sv->getFreqCounterValue());
+    EXPECT_EQ(this->initialFreqCount, this->sv->getFreqCounterValue());
 }
 
 /// Check that StoredValue / OrderedStoredValue don't unexpectedly change in
@@ -331,7 +335,7 @@ TEST_F(OrderedStoredValueTest, expectedSize) {
 // Check that when we copy a OSV, the freqCounter is also copied. (Cannot copy
 // StoredValues, hence no version for them).
 TEST_F(OrderedStoredValueTest, copyStoreValue) {
-    ASSERT_EQ(4, sv->getFreqCounterValue());
+    ASSERT_EQ(this->initialFreqCount, sv->getFreqCounterValue());
     sv->setFreqCounterValue(100);
     ASSERT_EQ(100, sv->getFreqCounterValue());
 

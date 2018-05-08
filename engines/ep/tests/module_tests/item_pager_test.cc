@@ -539,9 +539,23 @@ TEST_P(STItemPagerTest, isEligible) {
             QUEUE_BG_FETCH | HONOR_STATES | TRACK_REFERENCE | DELETE_TEMP |
             HIDE_LOCKED_CAS | TRACK_STATISTICS);
 
-    for (int ii = 0; ii < 10; ii++) {
+    VBucketPtr vb = store->getVBucket(vbid);
+    auto initialFreqCount = ItemEviction::initialFreqCount;
+    bool exceededInitialFreqCount = false;
+    uint64_t sanityCount = 0;
+    // Repeatedly store the same key-value pair until its frequency count
+    // exceeds the initialFreqCount of 64.  Note: It will be created with the
+    // initialFreqCount and will take approximately 80 'increments' before
+    // increasing by 1.
+    while (!exceededInitialFreqCount) {
         auto key = makeStoredDocKey("xxx_0");
-        store->get(key, vbid, cookie, options);
+        auto value = store->get(key, vbid, cookie, options);
+        // Have sanity count to ensure the does not loop more than 200 times
+        if (value.item->getFreqCounterValue() > initialFreqCount ||
+            sanityCount == 200) {
+            exceededInitialFreqCount = true;
+        }
+        sanityCount++;
         ObjectRegistry::onSwitchThread(epe);
     }
     std::shared_ptr<std::atomic<bool>> available;
@@ -559,10 +573,9 @@ TEST_P(STItemPagerTest, isEligible) {
                                                 &phase,
                                                 isEphemeral);
 
-    VBucketPtr vb = store->getVBucket(vbid);
     pv->visitBucket(vb);
-    auto initialCount = ItemEviction::initialFreqCount;
-    EXPECT_NE(initialCount, pv->getItemEviction().getFreqThreshold(100.0));
+
+    EXPECT_NE(initialFreqCount, pv->getItemEviction().getFreqThreshold(100.0));
     EXPECT_NE(255, pv->getItemEviction().getFreqThreshold(100.0));
 }
 
