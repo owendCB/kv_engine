@@ -84,6 +84,10 @@ public:
      */
     void reset();
 
+    size_t getSize() const {
+        return hdr_get_memory_size(histogram.get());
+    }
+
     /**
      * Returns the value held in the histogram at the percentile defined by
      * the input parameter percentage.
@@ -96,6 +100,13 @@ public:
      *        a single bucket
      */
     Iterator makeLinearIterator(int64_t valueUnitsPerBucket) const;
+
+    uint64_t getMaxValue() const {
+        return maxValue;
+    }
+
+    Iterator makeLogIterator(
+            int64_t valueUnitsFirstBucket, double logBase) const;
 
     /**
      * Gets the next value and corresponding count from the histogram
@@ -113,4 +124,6 @@ private:
      * unique_ptr to a hdr_histogram structure
      */
     UniquePtr histogram;
+
+    uint64_t maxValue;
 };

@@ -136,14 +136,18 @@ void audit_auth_success(const Connection* c) {
 }
 
 void audit_bucket_flush(const Connection* c, const char* bucket) {
-    if (!isEnabled(MEMCACHED_AUDIT_BUCKET_FLUSH)) {
-        return;
-    }
-    auto root = create_memcached_audit_object(c);
-    cJSON_AddStringToObject(root.get(), "bucket", bucket);
-
-    do_audit(c, MEMCACHED_AUDIT_BUCKET_FLUSH, root,
-             "Failed to send BUCKET_FLUSH audit event");
+//    LOG_WARNING("owend: called audit_bucket_flush");
+//
+//    if (!isEnabled(MEMCACHED_AUDIT_BUCKET_FLUSH)) {
+//        LOG_WARNING("owend: audit_bucket_flush - not enabled");
+//        return;
+//    }
+//    LOG_WARNING("owend: audit_bucket_flush - is enabled");
+//    auto root = create_memcached_audit_object(c);
+//    cJSON_AddStringToObject(root.get(), "bucket", bucket);
+//    LOG_WARNING("owend: audit_bucket_flush - generating audit event");
+//    do_audit(c, MEMCACHED_AUDIT_BUCKET_FLUSH, root,
+//             "Failed to send BUCKET_FLUSH audit event");
 }
 
 void audit_dcp_open(const Connection* c) {

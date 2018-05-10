@@ -59,8 +59,12 @@ public:
     // Adds a value to the frequency histogram.
     void addValueToFreqHistogram(uint8_t v);
 
+    void addValueToAgeHistogram(uint64_t v);
+
     // Returns the number of values added to the frequency histogram.
     uint64_t getFreqHistogramValueCount() const;
+
+    uint64_t getAgeHistogramValueCount() const;
 
     // Clears the frequency histogram and sets the requiredToUpdateInterval
     // back to 1.
@@ -69,6 +73,8 @@ public:
     // StatCounter: Returns the value held in the frequency histogram at the
     // percentile defined by the input parameter percentage.
     uint16_t getFreqThreshold(double percentage) const;
+
+    uint64_t getAgeThreshold(double percentage) const;
 
     // StatCounter: Return true if learning what the frequency counter
     // threshold should be for eviction, else return false.
@@ -123,6 +129,8 @@ private:
 
     // The execution frequency histogram
     HdrHistogram freqHistogram{minFreqValue, maxFreqValue, significantFigures};
+
+    HdrHistogram ageHistogram{minFreqValue, (std::numeric_limits<uint64_t>::max() >> 16), 1};
 
     // StatCounter: The number of frequencies that need to be added to the
     // frequency histogram before it is necessary to update the frequency

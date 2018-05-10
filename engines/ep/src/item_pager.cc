@@ -56,6 +56,7 @@ PagingVisitor::PagingVisitor(KVBucket& s,
     : VBucketVisitor(vbFilter),
       ejected(0),
       freqCounterThreshold(0),
+      ageThreshold(0),
       store(s),
       stats(st),
       percent(pcnt),
@@ -115,8 +116,16 @@ PagingVisitor::PagingVisitor(KVBucket& s,
             auto storedValueFreqCounter = v.getFreqCounterValue();
 
             bool evicted = true;
+            bool addToAgeHistogram = false;
 
-            if (storedValueFreqCounter <= freqCounterThreshold) {
+            uint64_t age = (maxCas > v.getCas()) ? (maxCas - v.getCas()) : 0;
+            age = age >> 16;
+            stats.casHisto.addValue(age);
+          //  LOG(EXTENSION_LOG_WARNING, "casHisto.size = %zu age=%lld ageThreshold=%lld",
+            //    stats.casHisto.getSize(), age, ageThreshold);
+
+            if ((storedValueFreqCounter <= freqCounterThreshold) &&
+                    ((storedValueFreqCounter == 0) || (age >= ageThreshold))) {
                 /*
                  * If the storedValue is eligible for eviction then add its
                  * frequency counter value to the histogram, otherwise add the
@@ -128,9 +137,29 @@ PagingVisitor::PagingVisitor(KVBucket& s,
                  * so that we get a frequency threshold that will remove the
                  * correct number of storedValue items.
                  */
-                if (!doEviction(lh, &v)) {
+                if (doEviction(lh, &v)) {
+                    addToAgeHistogram = true;
+                } else {
                     evicted = false;
                     storedValueFreqCounter = std::numeric_limits<uint8_t>::max();
+                    auto& max255Histo = ((currentBucket->getState() ==
+                                          vbucket_state_active) ||
+                                         (currentBucket->getState() ==
+                                          vbucket_state_pending))
+                                                ? stats.activeOrPending255Histo
+                                                : stats.replica255Histo;
+                    max255Histo.addValue(0);
+                    if (v.isDirty()) {
+                        max255Histo.addValue(4);
+                    }
+                    if (v.isDeleted()) {
+                        max255Histo.addValue(8);
+                    }
+                    if (currentBucket->getEvictionPolicy() == VALUE_ONLY) {
+                        if (!v.isResident()) {
+                            max255Histo.addValue(12);
+                        }
+                    }
                 }
             } else {
                 evicted = false;
@@ -138,7 +167,28 @@ PagingVisitor::PagingVisitor(KVBucket& s,
                 // we want to add the maximum value (255).
                 if (!currentBucket->eligibleToPageOut(lh, v)) {
                     storedValueFreqCounter = std::numeric_limits<uint8_t>::max();
+                    auto& max255Histo = ((currentBucket->getState() ==
+                                          vbucket_state_active) ||
+                                         (currentBucket->getState() ==
+                                          vbucket_state_pending))
+                                                ? stats.activeOrPending255Histo
+                                                : stats.replica255Histo;
+                    max255Histo.addValue(1);
+                    if (v.isDirty()) {
+                        max255Histo.addValue(5);
+                    }
+                    if (v.isDeleted()) {
+                        max255Histo.addValue(9);
+                    }
+
+                    if (currentBucket->getEvictionPolicy() == VALUE_ONLY) {
+                        if (!v.isResident()) {
+                            max255Histo.addValue(13);
+                        }
+                    }
+
                 } else {
+                    addToAgeHistogram = true;
                     /*
                      * MB-29333 - For items that we have visited and did not
                      * evict just because their frequency counter was too high,
@@ -152,8 +202,11 @@ PagingVisitor::PagingVisitor(KVBucket& s,
                     }
                 }
             }
-            itemEviction.addValueToFreqHistogram(storedValueFreqCounter);
 
+            itemEviction.addValueToFreqHistogram(storedValueFreqCounter);
+            if (addToAgeHistogram) {
+              itemEviction.addValueToAgeHistogram(age);
+            }
             if (evicted) {
                 /**
                  * Note: We are not taking a reader lock on the vbucket state.
@@ -177,6 +230,10 @@ PagingVisitor::PagingVisitor(KVBucket& s,
                 itemEviction.isRequiredToUpdate()) {
                 freqCounterThreshold =
                         itemEviction.getFreqThreshold(percent * 100.0);
+                if (itemEviction.getAgeHistogramValueCount() > 0) {
+                    ageThreshold = itemEviction.getAgeThreshold(50.0);
+                }
+               LOG(EXTENSION_LOG_WARNING, "freqCounterThreshold=%d ageThreshold=%lld",freqCounterThreshold, ageThreshold);
             }
 
             return true;
@@ -218,7 +275,15 @@ PagingVisitor::PagingVisitor(KVBucket& s,
             adjustPercent(p, vb->getState());
             if (vBucketFilter(vb->getId())) {
                 currentBucket = vb;
+                maxCas = currentBucket->getMaxCas();
                 itemEviction.reset();
+                auto& max255Histo = ((currentBucket->getState() ==
+                                                          vbucket_state_active) ||
+                                                         (currentBucket->getState() ==
+                                                          vbucket_state_pending))
+                                                                ? stats.activeOrPending255Histo
+                                                                : stats.replica255Histo;
+                max255Histo.reset();
                 freqCounterThreshold = 0;
 
                 if (currentBucket->ht.getEvictionPolicy() ==

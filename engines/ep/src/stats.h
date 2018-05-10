@@ -411,6 +411,13 @@ public:
     HdrHistogram replicaFrequencyValuesSnapshotHisto{
             minHdrValue, maxHdrValue, significantFigures};
 
+    HdrHistogram casHisto{
+        minHdrValue, (std::numeric_limits<uint64_t>::max() >> 16), 1};
+
+    HdrHistogram activeOrPending255Histo{
+            minHdrValue, maxHdrValue, significantFigures};
+
+    HdrHistogram replica255Histo{minHdrValue, maxHdrValue, significantFigures};
     //
     // Command timers
     //
@@ -549,6 +556,9 @@ public:
         replicaFrequencyValuesEvictedHisto.reset();
         activeOrPendingFrequencyValuesSnapshotHisto.reset();
         replicaFrequencyValuesSnapshotHisto.reset();
+        activeOrPending255Histo.reset();
+        replica255Histo.reset();
+        casHisto.reset();
     }
 
     // Used by stats logging infrastructure.

@@ -97,6 +97,8 @@ protected:
     // should evict items from the hash table.
     uint16_t freqCounterThreshold;
 
+    uint64_t ageThreshold;
+
 private:
     // Removes checkpoints that are both closed and unreferenced, thereby
     // freeing the associated memory.
@@ -121,6 +123,7 @@ private:
     bool wasHighMemoryUsage;
     ProcessClock::time_point taskStart;
     std::atomic<item_pager_phase>* pager_phase;
+    uint64_t maxCas;
 
     // Indicates whether the vbucket we are visiting is from an ephemeral
     // bucket.

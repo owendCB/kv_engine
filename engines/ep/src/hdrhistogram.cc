@@ -26,7 +26,8 @@ void HdrHistogram::HdrDeleter::operator()(struct hdr_histogram* val) {
 
 HdrHistogram::HdrHistogram(uint64_t lowestTrackableValue,
                            uint64_t highestTrackableValue,
-                           int significantFigures) {
+                           int significantFigures) :
+                               maxValue(highestTrackableValue+1) {
     struct hdr_histogram* hist;
     // We add a bias of +1 to the lowest and highest trackable value
     // because we add +1 to all values we store in the histogram (as this
@@ -70,6 +71,13 @@ HdrHistogram::Iterator HdrHistogram::makeLinearIterator(
         int64_t valueUnitsPerBucket) const {
     HdrHistogram::Iterator iter;
     hdr_iter_linear_init(&iter, histogram.get(), valueUnitsPerBucket);
+    return iter;
+}
+
+HdrHistogram::Iterator HdrHistogram::makeLogIterator(
+        int64_t valueUnitsFirstBucket, double logBase) const {
+    HdrHistogram::Iterator iter;
+    hdr_iter_log_init(&iter, histogram.get(), valueUnitsFirstBucket, logBase);
     return iter;
 }
 

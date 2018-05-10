@@ -43,26 +43,6 @@
       }
     },
     {
-      "id": 20482,
-      "name": "bucket flush",
-      "description": "Flushed the content of a bucket",
-      "sync": false,
-      "enabled": true,
-      "filtering_permitted": true,
-      "mandatory_fields": {
-        "timestamp": "",
-        "real_userid": {
-          "domain": "",
-          "user": ""
-        },
-        "bucket": ""
-      },
-      "optional_fields": {
-        "peername": "",
-        "sockname": ""
-      }
-    },
-    {
       "id": 20483,
       "name": "invalid packet",
       "description": "Rejected an invalid packet",

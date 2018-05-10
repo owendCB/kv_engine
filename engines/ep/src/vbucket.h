@@ -1292,6 +1292,10 @@ public:
         EventuallyPersistentEngine& engine;
     };
 
+    item_eviction_policy_t getEvictionPolicy() const {
+        return eviction;
+    }
+
 protected:
     /**
      * This function checks for the various states of the value & depending on

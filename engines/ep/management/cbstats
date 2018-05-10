@@ -346,6 +346,9 @@ def histograms(mc, raw_stats):
                       'ep_replica_eviction_values_evicted' : no_label,
                       'ep_active_or_pending_eviction_values_snapshot' : no_label,
                       'ep_replica_eviction_values_snapshot' : no_label,
+                      'ep_active_or_pending_255_histo' : no_label,
+                      'ep_replica_255_histo' : no_label,
+                                            'ep_cas_histo' : no_label,
                       'paged_out_time': sec_label}
 
     histodata = {}

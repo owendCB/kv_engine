@@ -3700,6 +3700,20 @@ ENGINE_ERROR_CODE EventuallyPersistentEngine::doEvictionStats(
                     stats.replicaFrequencyValuesSnapshotHisto,
                     add_stat,
                     cookie);
+
+
+    add_casted_stat("ep_cas_histo",
+                    stats.casHisto,
+                    add_stat,
+                    cookie);
+
+    add_casted_stat("ep_active_or_pending_255_histo",
+                    stats.activeOrPending255Histo,
+                    add_stat,
+                    cookie);
+
+    add_casted_stat(
+            "ep_replica_255_histo", stats.replica255Histo, add_stat, cookie);
     return ENGINE_SUCCESS;
 }
 

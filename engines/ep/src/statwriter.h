@@ -73,15 +73,26 @@ inline void add_casted_stat(const char* k,
                             const HdrHistogram& v,
                             ADD_STAT add_stat,
                             const void* cookie) {
-    HdrHistogram::Iterator iter{v.makeLinearIterator(1)};
+    bool log = false;
+    uint64_t previous = 0;
+    HdrHistogram::Iterator iter;
+    if (v.getMaxValue() > 300) {
+        iter = v.makeLogIterator(1, 2.0);
+        log = true;
+    } else {
+        iter = v.makeLinearIterator(1);
+   }
     while (auto result = v.getNextValueAndCount(iter)) {
         if (result->second > 0) {
             std::stringstream ss;
-            ss << k << "_" << result->first << "," << result->first;
+            if (!log) {previous = result->first;}
+            ss << k << "_" << previous << "," << result->first;
             add_casted_stat(ss.str().c_str(), result->second, add_stat, cookie);
+            previous = result->first;
         }
     }
 }
+
 
 /// @cond DETAILS
 /**

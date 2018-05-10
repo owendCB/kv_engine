@@ -27,12 +27,21 @@ void ItemEviction::addValueToFreqHistogram(uint8_t v) {
     freqHistogram.addValue(v);
 }
 
+void ItemEviction::addValueToAgeHistogram(uint64_t v) {
+    ageHistogram.addValue(v);
+}
+
 uint64_t ItemEviction::getFreqHistogramValueCount() const {
     return freqHistogram.getValueCount();
 }
 
+uint64_t ItemEviction::getAgeHistogramValueCount() const {
+    return ageHistogram.getValueCount();
+}
+
 void ItemEviction::reset() {
     freqHistogram.reset();
+    ageHistogram.reset();
     requiredToUpdateInterval = 1;
 }
 
@@ -40,6 +49,10 @@ uint16_t ItemEviction::getFreqThreshold(double percentage) const {
     uint16_t freq = gsl::narrow<uint16_t>(
             freqHistogram.getValueAtPercentile(percentage));
     return freq;
+}
+
+uint64_t ItemEviction::getAgeThreshold(double percentage) const {
+    return ageHistogram.getValueAtPercentile(percentage);
 }
 
 uint8_t ItemEviction::convertFreqCountToNRUValue(uint8_t probCounter) {
