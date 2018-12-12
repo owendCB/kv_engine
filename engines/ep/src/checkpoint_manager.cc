@@ -262,6 +262,10 @@ CursorRegResult CheckpointManager::registerCursorBySeqno_UNLOCKED(
                                                              itr,
                                                              (*itr)->begin());
             connCursors[name] = cursor;
+
+//            EP_LOG_WARN("registerCursorBySeqno_UNLOCKED(1): inc({}) cursor({}) checkpoint({})",
+//                        (*itr)->getNumCursorsInCheckpoint(),
+//                        name, (*itr)->getId());
             (*itr)->incNumOfCursorsInCheckpoint();
             result.seqno = (*itr)->getLowSeqno();
             result.cursor.setCursor(cursor);
@@ -286,6 +290,9 @@ CursorRegResult CheckpointManager::registerCursorBySeqno_UNLOCKED(
             auto cursor =
                     std::make_shared<CheckpointCursor>(name, itr, iitr);
             connCursors[name] = cursor;
+//            EP_LOG_WARN("registerCursorBySeqno_UNLOCKED(2): inc({}) cursor({}) checkpoint({})",
+//                        (*itr)->getNumCursorsInCheckpoint(),
+//                                    name, (*itr)->getId());
             (*itr)->incNumOfCursorsInCheckpoint();
             result.cursor.setCursor(cursor);
             break;
@@ -323,6 +330,11 @@ bool CheckpointManager::removeCursor_UNLOCKED(const CheckpointCursor* cursor) {
                  cursor->name,
                  vbucketId);
 
+    if ((*cursor->currentCheckpoint)->getNumCursorsInCheckpoint() == 0) {
+    EP_LOG_WARN("removeCursor_UNLOCKED: dec({}) cursor({}) checkpoint({})",
+                (*cursor->currentCheckpoint)->getNumCursorsInCheckpoint(),
+                cursor->name, (*cursor->currentCheckpoint)->getId());
+    }
     (*cursor->currentCheckpoint)->decNumOfCursorsInCheckpoint();
 
     if (connCursors.erase(cursor->name) == 0) {
@@ -764,6 +776,10 @@ void CheckpointManager::resetCursors(bool resetPersistenceCursor) {
         }
         cit.second->currentCheckpoint = checkpointList.begin();
         cit.second->currentPos = checkpointList.front()->begin();
+//        EP_LOG_WARN("resetCursors({}): inc({}) cursor({}) checkpoint({})",
+//                    resetPersistenceCursor,
+//                    checkpointList.front()->getNumCursorsInCheckpoint(),
+//                    cit.second->name, (*cit.second->currentCheckpoint)->getId());
         checkpointList.front()->incNumOfCursorsInCheckpoint();
     }
 }
@@ -779,12 +795,21 @@ bool CheckpointManager::moveCursorToNextCheckpoint(CheckpointCursor &cursor) {
     }
 
     // Remove cursor from its current checkpoint.
+    if ((*it)->getNumCursorsInCheckpoint() == 0) {
+    EP_LOG_WARN("moveCursorToNextCheckpoint: dec({}) cursor({}) checkpoint({})",
+                (*it)->getNumCursorsInCheckpoint(),
+                cursor.name, (*cursor.currentCheckpoint)->getId());
+    }
     (*it)->decNumOfCursorsInCheckpoint();
 
     // Move the cursor to the next checkpoint.
     ++it;
     cursor.currentPos = (*it)->begin();
     // Add cursor to its new current checkpoint.
+
+//    EP_LOG_WARN("moveCursorToNextCheckpoint: inc({}) cursor({}) checkpoint({})",
+//                (*it)->getNumCursorsInCheckpoint(),
+//                cursor.name, (*cursor.currentCheckpoint)->getId());
     (*it)->incNumOfCursorsInCheckpoint();
 
     return true;
