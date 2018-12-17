@@ -123,6 +123,7 @@ ActiveStream::ActiveStream(EventuallyPersistentEngine* e,
 
 ActiveStream::~ActiveStream() {
     if (state_ != StreamState::Dead) {
+        std::cerr << "~ActiveStream()" << std::endl;
         removeCheckpointCursor();
     }
 }
@@ -283,6 +284,7 @@ void ActiveStream::markDiskSnapshot(uint64_t startSeqno, uint64_t endSeqno) {
         if (!(flags_ & DCP_ADD_STREAM_FLAG_DISKONLY)) {
             // Only re-register the cursor if we still need to get memory
             // snapshots
+            std::cerr << "re-register cursor" << std::endl;
             registerCursor(*vb->checkpointManager, chkCursorSeqno);
         }
     }
@@ -1548,7 +1550,31 @@ bool ActiveStream::dropCheckpointCursor_UNLOCKED() {
         endStream(END_STREAM_STATE);
         notifyStreamReady();
     }
-    return vbucket->checkpointManager->removeCursor(cursor.lock().get());
+    {
+                auto sp = cursor.lock();
+                if (sp.get() != nullptr) {
+                EP_LOG_WARN("Before removed cursor (drop) - {} use_count = {}", sp->name, sp.use_count());
+                std::cerr << "Before removed cursor (drop) =" << sp->name << " use_count = " << sp.use_count() << std::endl;
+                }
+            }
+
+
+    auto removed = vbucket->checkpointManager->removeCursor(cursor.lock().get());
+    if (removed) {
+        std::cerr << "successfully removed" << std::endl;
+        auto sp = cursor.lock();
+        if (sp.get() != nullptr) {
+          EP_LOG_WARN("Just removed cursor (drop) - {} use_count = {}", sp->name, sp.use_count());
+          std::cerr << "Just removed cursor (drop) =" << sp->name << " use_count = " << sp.use_count() << std::endl;
+        }
+        cursor.setCursor(nullptr);
+    }
+
+    auto sp = cursor.lock();
+    if (sp.get() != nullptr) {
+        std::cerr << "not null!!!!!" << std::endl;
+    }
+    return removed;
 }
 
 spdlog::level::level_enum ActiveStream::getTransitionStateLogLevel(
@@ -1575,6 +1601,21 @@ void ActiveStream::notifyStreamReady(bool force) {
 void ActiveStream::removeCheckpointCursor() {
     VBucketPtr vb = engine->getVBucket(vb_);
     if (vb) {
-        vb->checkpointManager->removeCursor(cursor.lock().get());
+        {
+            auto sp = cursor.lock();
+            if (sp.get() != nullptr) {
+            EP_LOG_WARN("Before removed cursor - {} use_count = {}", sp->name, sp.use_count());
+            std::cerr << "Before removed cursor =" << sp->name << " use_count = " << sp.use_count() << std::endl;
+            }
+        }
+        if (vb->checkpointManager->removeCursor(cursor.lock().get())) {
+            std::cerr << "successfully removed cursor again!" << std::endl;
+            auto sp = cursor.lock();
+            if (sp.get() != nullptr) {
+            EP_LOG_WARN("Just removed cursor - {} use_count", sp->name, sp.use_count());
+            std::cerr << "Just removed cursor =" << sp->name << " use_count = " << sp.use_count() << std::endl;
+            }
+            cursor.setCursor(nullptr);
+        }
     }
 }

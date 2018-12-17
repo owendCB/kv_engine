@@ -147,8 +147,9 @@ private:
      * @return number of items remaining to be processed.
      */
     size_t getRemainingItemsCount() const;
-
+public:
     std::string                      name;
+private:
     CheckpointList::iterator currentCheckpoint;
     CheckpointQueue::iterator currentPos;
 
@@ -326,6 +327,49 @@ public:
      */
     void setState_UNLOCKED(checkpoint_state state);
 
+
+    //////// owend start
+    /**
+     * Return the number of cursors that are currently walking through this checkpoint.
+     */
+    size_t getNumberOfCursors() const {
+        LockHolder lh(lock);
+        return cursors.size();
+    }
+
+    /**
+     * Register a cursor's name to this checkpoint
+     */
+    void registerCursorName(const std::string &name) {
+        LockHolder lh(lock);
+        cursors.insert(name);
+    }
+
+    /**
+     * Remove a cursor's name from this checkpoint
+     */
+    void removeCursorName(const std::string &name) {
+        LockHolder lh(lock);
+        cursors.erase(name);
+    }
+
+    /**
+     * Return true if the cursor with a given name exists in this checkpoint
+     */
+    bool hasCursorName(const std::string &name) const {
+        LockHolder lh(lock);
+        return cursors.find(name) != cursors.end();
+    }
+
+    /**
+     * Return the list of all cursor names in this checkpoint
+     */
+    const std::set<std::string> &getCursorNameList() const {
+        return cursors;
+    }
+
+    //////// owend end
+
     void incNumOfCursorsInCheckpoint() {
         ++numOfCursorsInCheckpoint;
     }
@@ -415,6 +459,15 @@ public:
         return sizeof(Checkpoint) + memOverhead;
     }
 
+    // owend start
+    /**
+      * Function invoked by the cursor-dropper which checks if the
+      * peristence cursor is currently in the given checkpoint, in
+      * which case returns false, otherwise true.
+      */
+    bool isEligibleToBeUnreferenced();
+    // owend end
+
     /**
      * Invoked by the checkpoint manager whenever an item is queued
      * into the given checkpoint.
@@ -471,6 +524,10 @@ private:
     size_t                         numItems;
     /// Number of meta items (see Item::isCheckPointMetaItem).
     size_t numMetaItems;
+
+    // owend start
+    std::set<std::string>          cursors; // List of cursors with their unique names.
+    // owend end
 
     // Count of the number of cursors that reside in the checkpoint
     cb::NonNegativeCounter<size_t> numOfCursorsInCheckpoint = 0;

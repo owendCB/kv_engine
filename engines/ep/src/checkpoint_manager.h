@@ -312,6 +312,8 @@ public:
      */
     std::vector<Cursor> getListOfCursorsToDrop();
 
+    std::vector<Cursor> getListOfCursorsToDrop2();
+
     /**
      * @return True if at least one checkpoint is unreferenced and can
      * be removed.
@@ -445,7 +447,7 @@ protected:
 
     void removeInvalidCursorsOnCheckpoint(Checkpoint *pCheckpoint);
 
-    bool moveCursorToNextCheckpoint(CheckpointCursor &cursor);
+    bool moveCursorToNextCheckpoint(CheckpointCursor &cursor, int v);
 
     /**
      * Check the current open checkpoint to see if we need to create the new open checkpoint.

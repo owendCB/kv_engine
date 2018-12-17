@@ -176,7 +176,7 @@ void CheckpointManager::addNewCheckpoint_UNLOCKED(uint64_t id,
 
         if (cursor.currentPos == (*(cursor.currentCheckpoint))->end()) {
            if ((*(cursor.currentCheckpoint))->getState() == CHECKPOINT_CLOSED) {
-               if (!moveCursorToNextCheckpoint(cursor)) {
+               if (!moveCursorToNextCheckpoint(cursor, 1)) {
                    --(cursor.currentPos);
                }
            } else {
@@ -220,6 +220,7 @@ void CheckpointManager::addOpenCheckpoint(uint64_t id,
 
 CursorRegResult CheckpointManager::registerCursorBySeqno(
         const std::string& name, uint64_t startBySeqno) {
+    std::cerr << "CheckpointManager::registerCursorBySeqno" << std::endl;
     LockHolder lh(queueLock);
     return registerCursorBySeqno_UNLOCKED(lh, name, startBySeqno);
 }
@@ -263,6 +264,7 @@ CursorRegResult CheckpointManager::registerCursorBySeqno_UNLOCKED(
                                                              (*itr)->begin());
             connCursors[name] = cursor;
             (*itr)->incNumOfCursorsInCheckpoint();
+            (*itr)->registerCursorName(name);
             result.seqno = (*itr)->getLowSeqno();
             result.cursor.setCursor(cursor);
             break;
@@ -287,6 +289,7 @@ CursorRegResult CheckpointManager::registerCursorBySeqno_UNLOCKED(
                     std::make_shared<CheckpointCursor>(name, itr, iitr);
             connCursors[name] = cursor;
             (*itr)->incNumOfCursorsInCheckpoint();
+            (*itr)->registerCursorName(name);
             result.cursor.setCursor(cursor);
             break;
         }
@@ -319,11 +322,28 @@ bool CheckpointManager::removeCursor_UNLOCKED(const CheckpointCursor* cursor) {
         return false;
     }
 
-    EP_LOG_DEBUG("Remove the checkpoint cursor with the name \"{}\" from {}",
+    EP_LOG_WARN("Remove the checkpoint cursor with the name \"{}\" from {}",
                  cursor->name,
                  vbucketId);
 
-    (*cursor->currentCheckpoint)->decNumOfCursorsInCheckpoint();
+    if ((*cursor->currentCheckpoint)->getNumCursorsInCheckpoint() == 0) {
+           EP_LOG_WARN("trying to removeCursor_UNLOCKED dec cursor that at 0 {}",cursor->name);
+       } else {
+           (*cursor->currentCheckpoint)->decNumOfCursorsInCheckpoint();
+       }
+
+    // We can simply remove the cursorfrom the checkpoint to which it
+    // currently belongs,
+    // by calling
+    // (*(it->second.currentCheckpoint))->removeCursorName(cursor->name);
+    // However, we just want to do more sanity checks by looking at each
+    // checkpoint. This won't
+    // cause much overhead because the max number of checkpoints allowed per
+    // vbucket is small.
+    for (const auto& checkpoint : checkpointList) {
+
+        checkpoint->removeCursorName(cursor->name);
+    }
 
     if (connCursors.erase(cursor->name) == 0) {
         throw std::logic_error(
@@ -354,7 +374,12 @@ bool CheckpointManager::isCheckpointCreationForHighMemUsage_UNLOCKED(
 
     // pesistence and conn cursors are all currently in the open checkpoint?
     bool allCursorsInOpenCheckpoint =
-            (connCursors.size() + 1) == openCkpt.getNumCursorsInCheckpoint();
+            (connCursors.size() + 1) == openCkpt.getNumberOfCursors();// openCkpt.getNumCursorsInCheckpoint();
+
+    if (openCkpt.getNumberOfCursors() != openCkpt.getNumCursorsInCheckpoint()) {
+        EP_LOG_WARN("isCheckpointCreationForHighMemUsage_UNLOCKED {} verses {}",
+                    openCkpt.getNumberOfCursors(), openCkpt.getNumCursorsInCheckpoint());
+    }
 
     if (memoryUsed > stats.mem_high_wat && allCursorsInOpenCheckpoint &&
         (openCkpt.getNumItems() >= MIN_CHECKPOINT_ITEMS ||
@@ -375,11 +400,22 @@ size_t CheckpointManager::removeClosedUnrefCheckpoints(
     CheckpointList unrefCheckpointList;
     {
         LockHolder lh(queueLock);
+
+        if (checkpointList.front()->getNumberOfCursors() != checkpointList.front()->getNumCursorsInCheckpoint())
+        {
+            EP_LOG_WARN("removeClosedUnrefCheckpoints A {} verses {}",
+                        checkpointList.front()->getNumberOfCursors(),
+                        checkpointList.front()->getNumCursorsInCheckpoint());
+        }
+
+
+
         uint64_t oldCheckpointId = 0;
         bool canCreateNewCheckpoint = false;
         if (checkpointList.size() < checkpointConfig.getMaxCheckpoints() ||
             (checkpointList.size() == checkpointConfig.getMaxCheckpoints() &&
-             checkpointList.front()->isNoCursorsInCheckpoint())) {
+                    checkpointList.front()->getNumberOfCursors() == 0)) {
+             //checkpointList.front()->isNoCursorsInCheckpoint())) {
             canCreateNewCheckpoint = true;
         }
         if (vbucket.getState() == vbucket_state_active &&
@@ -412,10 +448,19 @@ size_t CheckpointManager::removeClosedUnrefCheckpoints(
         for (; it != checkpointList.end() &&
                std::next(it) != checkpointList.end();
              ++it) {
+            removeInvalidCursorsOnCheckpoint((*it).get());
+
+
+            if ((*it)->getNumberOfCursors() != (*it)->getNumCursorsInCheckpoint()) {
+                EP_LOG_WARN("removeClosedUnrefCheckpoints B {} verses {}",
+                            (*it)->getNumberOfCursors(),
+                            (*it)->getNumCursorsInCheckpoint());
+            }
 
             // When we encounter the first checkpoint which has cursor(s) in it,
             // or if the persistence cursor is still operating, stop.
-            if ((*it)->getNumCursorsInCheckpoint() > 0 ||
+            //if ((*it)->getNumCursorsInCheckpoint() > 0 ||
+            if ((*it)->getNumberOfCursors() > 0 ||
                 (checkpointConfig.isPersistenceEnabled() &&
                  (*it)->getId() > pCursorPreCheckpointId)) {
                 break;
@@ -456,8 +501,29 @@ size_t CheckpointManager::removeClosedUnrefCheckpoints(
     return numUnrefItems;
 }
 
-std::vector<Cursor> CheckpointManager::getListOfCursorsToDrop() {
-    LockHolder lh(queueLock);
+void CheckpointManager::removeInvalidCursorsOnCheckpoint(
+                                                     Checkpoint *pCheckpoint) {
+    std::list<std::string> invalidCursorNames;
+    const std::set<std::string> &cursors = pCheckpoint->getCursorNameList();
+    std::set<std::string>::const_iterator cit = cursors.begin();
+    for (; cit != cursors.end(); ++cit) {
+        cursor_index::iterator mit = connCursors.find(*cit);
+        if (mit == connCursors.end() ||
+            pCheckpoint != (*(mit->second->currentCheckpoint)).get()) {
+            invalidCursorNames.push_back(*cit);
+        }
+    }
+
+    std::list<std::string>::iterator it = invalidCursorNames.begin();
+    for (; it != invalidCursorNames.end(); ++it) {
+        EP_LOG_WARN("removeInvalidCursorsOnCheckpoint cursor =",*it);
+        pCheckpoint->removeCursorName(*it);
+    }
+}
+
+
+std::vector<Cursor> CheckpointManager::getListOfCursorsToDrop2() {
+   // LockHolder lh(queueLock);
 
     Checkpoint* persistentCheckpoint =
             (persistenceCursor == nullptr)
@@ -500,14 +566,81 @@ std::vector<Cursor> CheckpointManager::getListOfCursorsToDrop() {
     return cursorsToDrop;
 }
 
+
+std::vector<Cursor> CheckpointManager::getListOfCursorsToDrop() {
+    LockHolder lh(queueLock);
+
+    // List of cursor whose streams will be closed
+    std::vector<Cursor> cursorsToDrop;
+
+    size_t num_checkpoints_to_unref;
+//    if (checkpointList.size() == 1) {
+//        num_checkpoints_to_unref = 0;
+//    } else if (checkpointList.size() <=
+//              (DEFAULT_MAX_CHECKPOINTS + MAX_CHECKPOINTS_UPPER_BOUND) / 2) {
+//        num_checkpoints_to_unref = 1;
+//    } else {
+//        num_checkpoints_to_unref = 2;
+//    }
+
+        if (checkpointList.size() == 1) {
+            num_checkpoints_to_unref = 0;
+        } else if (checkpointList.size() == 2) {
+            num_checkpoints_to_unref = 1;
+        } else {
+            num_checkpoints_to_unref = 2;
+        }
+
+    auto unref = num_checkpoints_to_unref;
+    int eligibleCount = 0;
+    auto it = checkpointList.begin();
+    while (num_checkpoints_to_unref != 0 && it != checkpointList.end()) {
+        if ((*it)->isEligibleToBeUnreferenced()) {
+            eligibleCount++;
+            const std::set<std::string> &cursors = (*it)->getCursorNameList();
+            for (const auto& cursor : cursors) {
+                auto itr = connCursors.find(cursor);
+                if (itr != connCursors.end()) {
+                    cursorsToDrop.emplace_back(itr->second);
+                }
+            }
+        } else {
+            break;
+        }
+        --num_checkpoints_to_unref;
+        ++it;
+    }
+
+    auto newList = getListOfCursorsToDrop2();
+
+    if (newList.size() != cursorsToDrop.size()) {
+        EP_LOG_WARN("getAllItemsForCursor() sizes not match old {} new {} num_checkpoints_to_unref = {} checkpointListSize = {} eligibleCount = {}",
+                    cursorsToDrop.size(), newList.size(), unref, checkpointList.size(), eligibleCount);
+    }
+    return cursorsToDrop;
+}
+
+
+
+
+
+
+
 bool CheckpointManager::hasClosedCheckpointWhichCanBeRemoved() const {
     LockHolder lh(queueLock);
     // Check oldest checkpoint; if closed and contains no cursors then
     // we can remove it (and possibly additional old-but-not-oldest
     // checkpoints).
     const auto& oldestCkpt = checkpointList.front();
+    if (oldestCkpt->getNumberOfCursors() != oldestCkpt->getNumCursorsInCheckpoint()) {
+        EP_LOG_WARN("hasClosedCheckpointWhichCanBeRemoved {} verses {}",
+                    oldestCkpt->getNumberOfCursors(),
+                    oldestCkpt->getNumCursorsInCheckpoint());
+    }
+
     return (oldestCkpt->getState() == CHECKPOINT_CLOSED) &&
-           (oldestCkpt->isNoCursorsInCheckpoint());
+            (oldestCkpt->getNumberOfCursors() == 0);
+         //  (oldestCkpt->isNoCursorsInCheckpoint());
 }
 
 void CheckpointManager::updateStatsForNewQueuedItem_UNLOCKED(
@@ -528,9 +661,15 @@ bool CheckpointManager::queueDirty(
     LockHolder lh(queueLock);
 
     bool canCreateNewCheckpoint = false;
+    if (checkpointList.front()->getNumberOfCursors() != checkpointList.front()->getNumCursorsInCheckpoint()) {
+        EP_LOG_WARN("queueDirty {} verses {}", checkpointList.front()->getNumberOfCursors(),
+                    checkpointList.front()->getNumCursorsInCheckpoint());
+    }
+
     if (checkpointList.size() < checkpointConfig.getMaxCheckpoints() ||
         (checkpointList.size() == checkpointConfig.getMaxCheckpoints() &&
-         checkpointList.front()->isNoCursorsInCheckpoint())) {
+                checkpointList.front()->getNumberOfCursors() == 0)) {
+         //checkpointList.front()->isNoCursorsInCheckpoint())) {
         canCreateNewCheckpoint = true;
     }
 
@@ -659,7 +798,7 @@ CheckpointManager::ItemsForCursor CheckpointManager::getItemsForCursor(
                 // checkpoint if possible; as that means the checkpoint we just
                 // completed has one less cursor in it (and could potentially be
                 // freed).
-                moveCursorToNextCheckpoint(cursor);
+                moveCursorToNextCheckpoint(cursor, 2);
                 break;
             }
         }
@@ -719,7 +858,7 @@ bool CheckpointManager::incrCursor(CheckpointCursor &cursor) {
     if (++(cursor.currentPos) != (*(cursor.currentCheckpoint))->end()) {
         return true;
     }
-    if (!moveCursorToNextCheckpoint(cursor)) {
+    if (!moveCursorToNextCheckpoint(cursor, 3)) {
         --(cursor.currentPos);
         return false;
     }
@@ -764,11 +903,12 @@ void CheckpointManager::resetCursors(bool resetPersistenceCursor) {
         }
         cit.second->currentCheckpoint = checkpointList.begin();
         cit.second->currentPos = checkpointList.front()->begin();
+        checkpointList.front()->registerCursorName(cit.second->name);
         checkpointList.front()->incNumOfCursorsInCheckpoint();
     }
 }
 
-bool CheckpointManager::moveCursorToNextCheckpoint(CheckpointCursor &cursor) {
+bool CheckpointManager::moveCursorToNextCheckpoint(CheckpointCursor &cursor, int v) {
     auto& it = cursor.currentCheckpoint;
     if ((*it)->getState() == CHECKPOINT_OPEN) {
         return false;
@@ -778,15 +918,28 @@ bool CheckpointManager::moveCursorToNextCheckpoint(CheckpointCursor &cursor) {
         }
     }
 
+    bool found = false;
+    // check  to see if cursor exists in list of cursors
+    for (const auto& c : connCursors) {
+        if (c.first == cursor.name) {
+            found = true;
+        }
+    }
+
     // Remove cursor from its current checkpoint.
-    (*it)->decNumOfCursorsInCheckpoint();
+    if ((*it)->getNumCursorsInCheckpoint() == 0) {
+        EP_LOG_WARN("trying moveCursorToNextCheckpoint dec cursor that at 0 {} v = {} found = {}",cursor.name, v, found);
+    } else {
+        (*it)->decNumOfCursorsInCheckpoint();
+    }
+    (*it)->removeCursorName(cursor.name);
 
     // Move the cursor to the next checkpoint.
     ++it;
     cursor.currentPos = (*it)->begin();
     // Add cursor to its new current checkpoint.
     (*it)->incNumOfCursorsInCheckpoint();
-
+    (*it)->registerCursorName(cursor.name);
     return true;
 }
 
@@ -1046,7 +1199,14 @@ size_t CheckpointManager::getMemoryUsageOfUnrefCheckpoints() const {
 
     size_t memUsage = 0;
     for (const auto& checkpoint : checkpointList) {
-        if (checkpoint->isNoCursorsInCheckpoint()) {
+        //if (checkpoint->isNoCursorsInCheckpoint()) {
+        if (checkpoint->getNumberOfCursors()  != checkpoint->getNumCursorsInCheckpoint()) {
+            EP_LOG_WARN("getMemoryUsageOfUnrefCheckpoints {} verses {}",
+                        checkpoint->getNumberOfCursors(),
+                        checkpoint->getNumCursorsInCheckpoint());
+        }
+
+        if (checkpoint->getNumberOfCursors() == 0) {
             memUsage += checkpoint->getMemConsumption();
         } else {
             break;

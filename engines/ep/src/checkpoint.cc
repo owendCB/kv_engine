@@ -267,6 +267,20 @@ void Checkpoint::addItemToCheckpoint(const queued_item& qi) {
     }
 }
 
+// owend start
+bool Checkpoint::isEligibleToBeUnreferenced() {
+    const std::set<std::string> &cursors = getCursorNameList();
+    std::set<std::string>::const_iterator cit = cursors.begin();
+    for (; cit != cursors.end(); ++cit) {
+        if ((*cit).compare(CheckpointManager::pCursorName) == 0) {
+            // Persistence cursor is on current checkpoint
+            return false;
+        }
+    }
+    return true;
+}
+//owend end
+
 std::ostream& operator <<(std::ostream& os, const Checkpoint& c) {
     os << "Checkpoint[" << &c << "] with"
        << " seqno:{" << c.getLowSeqno() << "," << c.getHighSeqno() << "}"

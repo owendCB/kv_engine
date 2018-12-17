@@ -21,6 +21,7 @@
 #include "checkpoint_manager.h"
 #include "checkpoint_remover.h"
 #include "checkpoint_visitor.h"
+#include "checkpoint.h"
 #include "connmap.h"
 #include "dcp/dcpconnmap.h"
 #include "ep_engine.h"
@@ -92,8 +93,10 @@ void ClosedUnrefCheckpointRemoverTask::cursorDroppingIfNeeded(void) {
                             vb->checkpointManager->getListOfCursorsToDrop();
                     for (const auto& cursor : cursors) {
                         if (memoryCleared < amountOfMemoryToClear) {
+                            auto sp = cursor.lock();
+                            EP_LOG_WARN("handleSlowStream cursor = {} use_count = {}", sp->name, sp.use_count());
                             if (engine->getDcpConnMap().handleSlowStream(
-                                        vbid, cursor.lock().get())) {
+                                        vbid, sp.get())) {
                                 auto memoryFreed =
                                         vb->getChkMgrMemUsageOfUnrefCheckpoints();
                                 ++stats.cursorsDropped;
