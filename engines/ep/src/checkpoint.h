@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include "checkpoint_iterator.h"
 #include "checkpoint_types.h"
 #include "ep_types.h"
 #include "item.h"
@@ -61,11 +62,15 @@ const char* to_string(enum checkpoint_state);
 typedef std::list<queued_item, MemoryTrackingAllocator<queued_item>>
         CheckpointQueue;
 
+// Iterator for the Checkpoint queue.  The Iterator is templated on the
+// queue type (CheckpointQueue).
+using ChkptQueueIterator = CheckpointIterator<CheckpointQueue>;
+
 /**
  * A checkpoint index entry.
  */
 struct index_entry {
-    CheckpointQueue::iterator position;
+    ChkptQueueIterator position;
     int64_t mutation_id;
 };
 
@@ -103,16 +108,16 @@ class CheckpointCursor {
     friend class CheckpointManager;
     friend class Checkpoint;
 public:
-    CheckpointCursor() {
-    }
-
-    CheckpointCursor(const std::string& n)
-        : name(n), currentCheckpoint(), currentPos() {
-    }
+    //    CheckpointCursor() {
+    //    }
+    //
+    //    CheckpointCursor(const std::string& n)
+    //        : name(n), currentCheckpoint(), currentPos() {
+    //    }
 
     CheckpointCursor(const std::string& n,
                      CheckpointList::iterator checkpoint,
-                     CheckpointQueue::iterator pos)
+                     ChkptQueueIterator pos)
         : name(n),
           currentCheckpoint(checkpoint),
           currentPos(pos),
@@ -152,7 +157,7 @@ private:
 
     std::string                      name;
     CheckpointList::iterator currentCheckpoint;
-    CheckpointQueue::iterator currentPos;
+    ChkptQueueIterator currentPos;
 
     // Number of times a cursor has been moved or processed.
     std::atomic<size_t>              numVisits;
@@ -388,28 +393,12 @@ public:
         snapEndSeqno = seqno;
     }
 
-    CheckpointQueue::iterator begin() {
-        return toWrite.begin();
+    ChkptQueueIterator begin() {
+        return ChkptQueueIterator(toWrite.begin());
     }
 
-    CheckpointQueue::const_iterator begin() const {
-        return toWrite.begin();
-    }
-
-    CheckpointQueue::iterator end() {
-        return toWrite.end();
-    }
-
-    CheckpointQueue::const_iterator end() const {
-        return toWrite.end();
-    }
-
-    CheckpointQueue::reverse_iterator rbegin() {
-        return toWrite.rbegin();
-    }
-
-    CheckpointQueue::reverse_iterator rend() {
-        return toWrite.rend();
+    ChkptQueueIterator end() {
+        return ChkptQueueIterator(toWrite.end());
     }
 
     /**
