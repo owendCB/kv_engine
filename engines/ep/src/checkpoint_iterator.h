@@ -44,9 +44,11 @@ public:
 
     CheckpointIterator(std::reference_wrapper<C> c, Position p) : container(c) {
         if (p == Position::begin) {
-            iter = container.get().begin();
+            // iter = container.get().begin();
+            index = 0;
         } else if (p == Position::end) {
-            iter = container.get().end();
+            // iter = container.get().end();
+            index = container.get().size();
         } else {
             throw std::invalid_argument(
                     "CheckpointIterator - Position is invalid. "
@@ -95,7 +97,10 @@ public:
     }
 
     auto operator==(CheckpointIterator ci) {
-        return (ci.iter == iter && &(ci.container.get()) == &(container.get()));
+        // return (ci.iter == iter && &(ci.container.get()) ==
+        // &(container.get()));
+        return (ci.index == index &&
+                &(ci.container.get()) == &(container.get()));
     }
 
     auto operator!=(CheckpointIterator ci) {
@@ -113,43 +118,50 @@ public:
 
     /// The following is required to allow erase to be invoked on
     /// CheckpointQueue as the erase method takes a const_iter.
-    auto getUnderlyingIterator() const {
-        return iter;
-    }
+    //    auto getUnderlyingIterator() const {
+    //        return iter;
+    //    }
 
 private:
     /// Is the iterator currently pointing to the "end" element.
     bool isAtEnd() const {
-        return (iter == container.get().end());
+        // return (iter == container.get().end());
+        return (index == container.get().size());
     }
 
     /// Is the iterator currently pointing to the first element,
     bool isAtStart() const {
-        return (iter == container.get().begin());
+        // return (iter == container.get().begin());
+        return (index == 0);
     }
 
     /// Is the iterator currently pointing to a null element.
     bool isNullElement() const {
-        return ((*iter).get() == nullptr);
+        // return ((*iter).get() == nullptr);
+        return ((container.get())[index].get() == nullptr);
     }
 
     /// Get the element currently being pointed to by the iterator.
     auto& getElement() const {
-        return *iter;
+        // return *iter;
+        return (container.get())[index];
     }
 
     /// Move the iterator forwards.
     void moveForward() {
-        ++iter;
+        //++iter;
+        ++index;
     }
 
     /// Move the iterator backwards.
     void moveBackward() {
-        --iter;
+        //--iter;
+        --index;
     }
 
     /// reference_wrapper of the container being iterated over.
     std::reference_wrapper<C> container;
     /// The Container's standard iterator
-    typename C::iterator iter;
+    // typename C::iterator iter;
+    size_type index;
 };

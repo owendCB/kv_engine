@@ -23,10 +23,11 @@
 #include "checkpoint_iterator.h"
 
 #include <benchmark/benchmark.h>
+#include <deque>
 #include <list>
 
 typedef std::unique_ptr<int> TestItem;
-typedef std::list<TestItem> ListContainer;
+typedef std::deque<TestItem> ListContainer;
 typedef CheckpointIterator<ListContainer> ListContainerIterator;
 
 ListContainerIterator listContainerBegin(ListContainer& c) {
