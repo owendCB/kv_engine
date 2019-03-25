@@ -103,20 +103,30 @@ public:
     }
 
     auto& operator*() {
-        if (isAtEnd()) {
-            throw std::out_of_range(
-                    "CheckpointIterator *() "
-                    "index is pointing to 'end'");
-        }
+        // @todo - uncomment if statement prior to Mad-Hatter relesase
+        //  MB-33423: The exception has been seen to throw. After
+        // detailed investigation, cause is still unknown.  Therefore
+        // temporarily disabling so that a mini-dump will be raised if
+        // the issue occurs again during testing.
+        // if (isAtEnd()) {
+        //     throw std::out_of_range(
+        //             "CheckpointIterator *() "
+        //             "index is pointing to 'end'");
+        // }
         return getElement();
     }
 
     const auto& operator*() const {
-        if (isAtEnd()) {
-            throw std::out_of_range(
-                    "CheckpointIterator *() const "
-                    "index is pointing to 'end'");
-        }
+        // @todo - uncomment if statement prior to Mad-Hatter relesase
+        //  MB-33423: The exception has been seen to throw. After
+        // detailed investigation, cause is still unknown.  Therefore
+        // temporarily disabling so that a mini-dump will be raised if
+        // the issue occurs again during testing.
+        // if (isAtEnd()) {
+        //     throw std::out_of_range(
+        //             "CheckpointIterator *() const "
+        //             "index is pointing to 'end'");
+        // }
         return getElement();
     }
 
